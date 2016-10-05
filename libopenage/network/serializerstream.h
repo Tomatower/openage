@@ -2,49 +2,130 @@
 
 #pragma once
 
+#include <deque>
 #include <string>
-#include <sstream>
+#include <vector>
 
 namespace openage {
 namespace network {
 
+/** \brief Tool to serialize packets into FIFO byte streams
+ *
+ * Serializing stuff FIFO-Style has the advantage, that exactly the same code can be used to read and write.
+ * This helps avoiding serialization errors, even in complex datatypes.
+ *
+ * Whenever data is written to the stream, it is done in the end, when it is read it comes from the beginning.
+ *
+ * To serialize complex structs, the @see on_wire methods can be used, like this:
+ *
+ * <pre>
+ * struct test { int a, int b };
+ *
+ * void on_wire(SerializerStream &ss, test &data) {
+ *     ss.on_wire(data.a)
+ *       .on_wire(data.b);
+ * }
+ * </pre>
+ *
+ * When this keeps the same order of execution when reading or writing.
+ *
+ */
 class SerializerStream {
 public:
+
+    /** \brief C'tor
+     */
     SerializerStream() :
-        size_{0}, is_write_{true} {}
+        is_write_{true} {}
 
-    SerializerStream &operator << (const int &data);
-    SerializerStream &operator >> (int &data);
 
-    SerializerStream &operator << (const std::string &data);
-    SerializerStream &operator >> (std::string &string);
-
-    SerializerStream &write(const uint8_t *data, size_t length);
-    SerializerStream &read(uint8_t *data, size_t length);
-
+    /** \brief Write data to the end of the stream
+     *
+     * \param data const int8_t* the data to be written
+     * \param length size_t the number of bytes to be written
+     * \return SerializerStream& *this
+     *
+     */
     SerializerStream &write(const int8_t *data, size_t length);
+
+    /** \brief Read data from the beginning of the stream
+     *
+     *
+     * \param data int8_t*
+     * \param length size_t
+     * \return SerializerStream&
+     *
+     */
     SerializerStream &read(int8_t *data, size_t length);
 
-    SerializerStream &write(const char *data, size_t length);
-    SerializerStream &read(char *data, size_t length);
+    ///@TODO add more basic datatypes - maybe templated?
 
+    /** \brief write / read int data
+     *
+     * \param data int*
+     * \return SerializerStream&
+     *
+     */
     SerializerStream &on_wire(int *data);
+
+
+    /** \brief write / read string data
+     *
+     * \param data std::string*
+     * \return SerializerStream&
+     *
+     */
     SerializerStream &on_wire(std::string *data);
 
-    const std::iostream &data();
-
+    /** \brief Drop all saved data.
+     *
+     * \return void
+     *
+     */
     void clear();
 
-    void set_data(int8_t *buffer, size_t size);
+    /** \brief Store raw data to be deserialized.
+     *
+     * \param buffer const std::vector<int8_t>& the data container. buffer.size is used to determine the buffersize
+     * \return void
+     *
+     */
+    void set_data(const std::vector<int8_t> &buffer);
 
+    /** \brief Get the serialized data from the package again.
+     *
+     * This buffer can be immediately fed back into the @see set_data method
+     *
+     * \param buffer std::vector<int8_t>&
+     * \return void
+     *
+     */
+    void get_data(std::vector<int8_t> &buffer) const;
+
+    /** \brief Set if the stream is currently configured for reading or writing
+     *
+     *
+     * \param write bool true => write data to this stream. false => read data into objects
+     * \return void
+     *
+     */
     void set_write_mode(bool write);
 
-    bool is_write();
+    /** \brief Get the write-state of the stream
+     *
+     * \return bool
+     *
+     */
+    bool is_write() const;
 
+    /** \brief get the number of bytes stored
+     *
+     * \return size_t
+     *
+     */
     size_t size();
 private:
-    std::stringstream stream;
-    size_t size_;
+    std::deque<int8_t> buffer;
     bool is_write_;
 };
 

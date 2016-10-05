@@ -149,6 +149,13 @@ public:
      */
     void clear();
 
+    /** \brief Serialized size how much data will be required after serialization
+     *
+     * This can be used to calculate the outcoming package size.
+     *
+     * \return size_t
+     *
+     */
     size_t serialized_size();
 
 private:

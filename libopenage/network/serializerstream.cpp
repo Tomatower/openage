@@ -7,136 +7,79 @@
 namespace openage {
 namespace network {
 
-//TODO: Check !is_write in write methods
-
-SerializerStream &SerializerStream::operator << (const int &data) {
-    assert(is_write());
-    stream.write((char*)&data, sizeof(data));
-    return *this;
-}
-
-
-SerializerStream &SerializerStream::operator >> (int &data) {
-    assert(!is_write());
-    stream >> data;
-    return *this;
-}
-
-
-SerializerStream &SerializerStream::operator << (const std::string &data) {
-    assert(is_write());
-    stream << data.length();
-    stream.write(data.data(), data.length());
-
-    return *this;
-}
-
-
-SerializerStream &SerializerStream::operator >> (std::string &data) {
-    assert(!is_write());
-    size_t length;
-    stream >> length;
-    data.resize(length);
-    stream.read(&data[0], length);
-    return *this;
-}
-
-
-SerializerStream &SerializerStream::write(const uint8_t *data, size_t length) {
-    assert(is_write());
-    stream.write((char*)data, length);
-    return *this;
-}
-
-
-SerializerStream &SerializerStream::read(uint8_t *data, size_t length)  {
-    assert(!is_write());
-    stream.read((char*)data, length);
-    return *this;
-}
-
 
 SerializerStream &SerializerStream::write(const int8_t *data, size_t length) {
-    assert(is_write());
-    stream.write((char*)data, length);
-    return *this;
+	assert(is_write());
+	std::copy(data, data + length, std::back_inserter(buffer));
+
+	return *this;
 }
 
 
 SerializerStream &SerializerStream::read(int8_t *data, size_t length) {
-    assert(!is_write());
-    stream.read((char*)data, length);
-    return *this;
-}
-
-
-SerializerStream &SerializerStream::write(const char *data, size_t length) {
-    assert(is_write());
-    stream.write((char*)data, length);
-    return *this;
-}
-
-
-SerializerStream &SerializerStream::read(char *data, size_t length) {
-    assert(!is_write());
-    stream.read((char*)data, length);
-    return *this;
+	assert(!is_write());
+	std::copy(buffer.begin(), buffer.begin() + length, data);
+	buffer.erase(buffer.begin(), buffer.begin() + length);
+	return *this;
 }
 
 
 SerializerStream &SerializerStream::on_wire(int *data) {
-    if (is_write()) {
-        (*this) << *data;
-    } else {
-        (*this) >> *data;
-    }
-    return *this;
+	if (is_write()) {
+		write((int8_t *)data, sizeof(*data));
+	} else {
+		read((int8_t *)data, sizeof(*data));
+	}
+	return *this;
 }
 
 
 SerializerStream &SerializerStream::on_wire(std::string *data) {
-    if (is_write()) {
-        (*this) << *data;
-    } else {
-        (*this) >> *data;
-    }
-    return *this;
-}
+	size_t length = is_write() ? data->length() : 0;
 
+	on_wire((int *)&length);
 
-const std::iostream &SerializerStream::data() {
-    assert(is_write());
-    return stream;
+	if (is_write()) {
+		write((int8_t *)&(*data)[0], length);
+	} else {
+		data->resize(length, ' ');
+		read((int8_t *)&(*data)[0], length);
+	}
+	return *this;
 }
 
 
 void SerializerStream::clear() {
-    stream.clear();
+	buffer.clear();
 }
 
 
-void SerializerStream::set_data(int8_t *buffer, size_t size)  {
-    assert(!is_write());
-    clear();
-    write((char*)buffer, size);
+void SerializerStream::set_data(const std::vector<int8_t> &new_data)  {
+	clear();
+//    buffer.reserve(new_data.size());
+	std::copy(new_data.begin(), new_data.end(), std::back_inserter(buffer));
+}
+
+
+void SerializerStream::get_data(std::vector<int8_t> &out_data) const {
+	out_data.clear();
+	out_data.reserve(buffer.size());
+	std::copy(buffer.begin(), buffer.end(), std::back_inserter(out_data));
 }
 
 
 void SerializerStream::set_write_mode(bool mode) {
-    is_write_ = mode;
+	is_write_ = mode;
 }
 
 
-bool SerializerStream::is_write() {
-    return is_write_;
+bool SerializerStream::is_write() const {
+	return is_write_;
 }
+
 
 size_t SerializerStream::size() {
-    size_t cur = stream.tellg(); //Current position
-    stream.seekg(0, std::ios::end);
-    size_t size = stream.tellg();  //End
-    stream.seekg(cur, std::ios::beg);
-    return size;
+	return buffer.size();
 }
 
 }
