@@ -207,7 +207,14 @@ void serializer_test() {
 
 void handshake_test() {
 	//TESTFAILMSG("NOT IMPLEMENTED YET");
+	Interface server("localhost", 9001, InterfaceType::SERVER);
 
+	Interface client("localhost", 9001, InterfaceType::CLIENT);
+
+	while (1) {
+		server.game_loop();
+		client.game_loop();
+	}
 }
 
 void game_mode_test() {

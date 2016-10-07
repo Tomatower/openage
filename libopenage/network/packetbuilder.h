@@ -20,8 +20,6 @@ class Packet;
  */
 class PacketBuilder {
 public:
-    typedef std::function<bool(Packet::static_state*)> static_state_provider;
-    typedef std::function<bool(Packet::dynamic_state*)> dynamic_state_provider;
 
     /** @brief C'tor, assigns the polling functions
      *
@@ -65,8 +63,6 @@ public:
      */
     void clear();
 private:
-    static_state_provider static_provider;
-    dynamic_state_provider dynamic_provider;
 
     std::unique_ptr<Packet> active_packet;
 };

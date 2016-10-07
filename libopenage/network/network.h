@@ -6,6 +6,13 @@
 #include <unordered_map>
 #include <memory>
 
+#include <sys/socket.h>
+
+#include "wiremanager.h"
+
+#include "../log/named_logsource.h"
+#include "../util/hash.h"
+
 namespace openage {
 
 class Player;
@@ -16,21 +23,7 @@ class Player;
 namespace network {
 
 class Packet;
-
-
-/**
- * Implements the remote side of the socket.
- * Here any information related to the remote side is stored.
- */
-class Host {
-public:
-	/**
-	 * The associated player
-	 *
-	 * This value has to be set upon receiving Event::Type::ESTABLISHED
-	 */
-	Player *connected_player;
-};
+class Host;
 
 /**
  * Represents state changes in the network stack
@@ -101,11 +94,80 @@ public:
 
 
 /**
+ * Implements the remote side of the socket.
+ * Here any information related to the remote side is stored.
+ */
+class Host {
+public:
+	enum class State {
+		/**
+		 * The connection was openend.
+		 */
+		CONNECT = Event::Type::CONNECT,
+
+		/**
+		 * Handshake requested, additional information to be used for authentication should reside in the kv_store
+		 * the handshake is started with a call to @see end_service.
+		 */
+		HANDSHAKE_REQUEST = Event::Type::HANDSHAKE_REQUEST,
+
+		/**
+		 * The remote end has sent a @see HANDSHAKE_REQUEST, the @see kv_store contains all information given by
+		 * the other side. Fill the kv_store with data to be transmitted in a @see HANDSHAKE_CONFIRMED or perform
+		 * a disconnect.
+		 */
+		HANDSHAKE_RESPONSE = Event::Type::HANDSHAKE_RESPONSE,
+
+		/**
+		 * The other end has confirmed your handshake and sent additional information, available in @see kv_store.
+		 * no additional actions are required at this point.
+		 */
+		HANDSHAKE_CONFIRMED = Event::Type::HANDSHAKE_CONFIRMED,
+
+		/**
+		 * Both ends switch to normal transmission mode.
+		 */
+		ESTABLISHED = Event::Type::ESTABLISHED,
+
+		/**
+		 * The Connection was dropped
+		 */
+		DISCONNECT = Event::Type::DISCONNECT,
+
+		/**
+		 * There was some kind of error, see @see kv_store for additional details
+		 */
+		ERROR = Event::Type::ERROR
+	};
+
+	State state;
+
+	sockaddr_storage src_addr;
+
+	std::unique_ptr<WireManager> wire;
+
+	/**
+	 * The associated player
+	 *
+	 * This value has to be set upon receiving Event::Type::ESTABLISHED
+	 */
+	std::shared_ptr<Player> connected_player;
+};
+
+
+enum class InterfaceType {
+	SERVER,
+	CLIENT,
+};
+
+
+/**
  * The primary interfacing class with network things.
  * Here connections, packets and events are managed.
  */
 class Interface {
 public:
+
 	/** @brief C'tor, get connection information
 	 *
 	 * @param remote uri of the remote server.
@@ -115,7 +177,9 @@ public:
 	 */
 	Interface (const std::string &remote,
 	           short port,
-	           bool server);
+	           InterfaceType type);
+
+	~Interface();
 
 	/** @brief top of network packet stack
 	 *
@@ -128,7 +192,7 @@ public:
 	 * @return top of network stack or nullptr, if no packet for the next frame was received.
 	 *
 	 */
-	Packet *current_packet() const;
+	std::shared_ptr<Packet> current_packet();
 
 	/** @brief pop the top of network packet stack
 	 *
@@ -156,7 +220,7 @@ public:
 	 * @return const std::deque<Host *>& list of connected players
 	 *
 	 */
-	const std::deque<Host *> &connected_players();
+	const std::deque<std::unique_ptr<Host>> &connected_players() const;
 
 	/** @brief start the service/event handling
 	 *
@@ -174,7 +238,7 @@ public:
 	 * @return int number of events
 	 *
 	 */
-	int get_event_count();
+	size_t get_event_count();
 
     /** \brief Accessor to a event in the queue
      *
@@ -184,6 +248,15 @@ public:
      */
 	Event *get_event(int id) const;
 
+	/** @brief Send the prepared message to the remote
+	 *
+	 * The Message will be created in this step via callbacks
+	 *
+	 * @param remote Host * destination to send it to. The Wiremanager of this user will be used
+	 * @return void
+	 *
+	 */
+	void handle(std::shared_ptr<Host> host);
 
 	/** @brief end the service/event handling
 	 *
@@ -191,17 +264,6 @@ public:
 	 *
 	 */
 	void end_service();
-
-	/** @brief Send a message to the remote
-	 *
-	 * Send a message to the remote. If remote is nullptr, the first host in the connected_players list is used
-	 *
-	 * @param pkt std::unique_ptr<Packet> Packet to be transmitted
-	 * @param remote Host * destination to send it to
-	 * @return void
-	 *
-	 */
-	void send(std::unique_ptr<Packet> pkt, Host *remote = nullptr);
 
     /** \brief Run the Game Loop
      *
@@ -218,20 +280,37 @@ public:
 	void lobby_loop();
 
 private:
+	void setup_client(const std::string &remote, short port);
+	void setup_server(short port);
+
+	std::shared_ptr<Host> get_host(const sockaddr &addr, bool pending_allowed);
+
+	void log(log::message, std::string text, bool fatal = false, int err = 0);
+
+private:
+	std::string remote;
+	std::string addr;
+
+	openage::log::NamedLogSource logsink;
+
 	std::deque<std::unique_ptr<Event>> events;
 
-	std::deque<Packet *> jitter_buffer;
-	std::deque<Packet *> pool;
+	class SockaddrHasher {
+	public:
+		size_t operator() (const sockaddr_storage &socka) const;
+		bool operator() (const sockaddr_storage &a, const sockaddr_storage &b) const;
+	};
 
-	std::deque<std::unique_ptr<Host>> connected;
-	std::deque<std::unique_ptr<Host>> handshake_pending;
+	std::unordered_map<sockaddr_storage, std::unique_ptr<Host>, SockaddrHasher> connected;
+	std::unordered_map<sockaddr_storage, std::unique_ptr<Host>, SockaddrHasher> handshake_pending;
 
-	int current_packet_frame;
+	std::vector<int8_t> network_buffer;
 
-	/**
-	 * get packet for frame, used for handling the input event stuff
-	 */
-	Packet *getFramePacket(int frame);
+	int gameloop_socket; //My UDP socket
+
+	bool is_server;
+
+	log::message state;
 };
 
 

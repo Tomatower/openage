@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <istream>
 #include <ostream>
+#include <memory>
 
 #include "serializerstream.h"
 
@@ -57,7 +58,7 @@ public:
      * @param stream SerializerStream&
      *
      */
-    Packet(Host *host, SerializerStream &stream);
+    Packet(std::shared_ptr<Host> host, SerializerStream &stream);
 
     /** @brief C'tor for Packet
      *
@@ -82,7 +83,7 @@ public:
     void from_stream(SerializerStream &stream);
 
     /** Host from where the message was received */
-    Host *source;
+    std::shared_ptr<Host> source;
 
     /**
      * Input actions that happened within this packet's timeframe.

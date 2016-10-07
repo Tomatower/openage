@@ -8,7 +8,7 @@ namespace openage {
 namespace network {
 
 
-Packet::Packet(Host *host, SerializerStream &data) :
+Packet::Packet(std::shared_ptr<Host> host, SerializerStream &data) :
 	source{host} {
 	assert(!data.is_write());
 	on_wire(data);
