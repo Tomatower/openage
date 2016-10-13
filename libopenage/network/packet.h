@@ -8,13 +8,13 @@
 #include <ostream>
 #include <memory>
 
-#include "serializerstream.h"
-
 namespace openage {
 namespace network {
 
 class Interface;
 class Host;
+class WireManager;
+class SerializerStream;
 
 /**
  *
@@ -48,6 +48,7 @@ class Host;
  */
 class Packet {
     friend class Interface;
+    friend class WireManager;
 public:
 
     /** @brief C'tor for packet
@@ -108,16 +109,6 @@ public:
     };
 
     /**
-     * State update
-     * - used for non-dynamic objects (buildings, trees, ...)
-     */
-    struct static_state {
-        int id;
-        int x,y;
-        std::unordered_map<int, int> kv_state;
-    };
-
-    /**
      * one step in the trajectory of the unit.
      * This can be used to extrapolate what a unit will do.
      */
@@ -128,10 +119,10 @@ public:
 
     /**
      * State update
-     * - used for dynamic objects (units, ...)
+     * - used for dynamic objects (units, ...) as well as static objects
      * The same as the static update but includes trajectories
      */
-    struct dynamic_state {
+    struct object_state {
         int id;
         int x,y;
         std::unordered_map<int, int> kv_state;
@@ -140,8 +131,7 @@ public:
 
     std::deque<input> inputs;
     std::deque<nyanchange> nyan_changes;
-    std::deque<static_state> static_states;
-    std::deque<dynamic_state> dynamic_states;
+    std::deque<object_state> object_states;
 
     /** @brief Clear all containing data and reset the Packet to factory state
      *
@@ -161,38 +151,6 @@ public:
 
 private:
     int _server_frame;
-
-    void on_wire(SerializerStream &stream);
-
-    void on_wire(SerializerStream &stream, int *data);
-    void on_wire(SerializerStream &stream, std::string *data);
-
-    void on_wire(SerializerStream &stream, input *data);
-    void on_wire(SerializerStream &stream, nyanchange *data);
-    void on_wire(SerializerStream &stream, static_state *data);
-    void on_wire(SerializerStream &stream, trajectory_element *data);
-    void on_wire(SerializerStream &stream, dynamic_state *data);
-
-    void map_on_wire(SerializerStream &stream, std::unordered_map<int, int> *data);
-
-    template <typename _Base>
-    void deque_on_wire(SerializerStream &stream, std::deque<_Base> *data) {
-        int cnt = data->size();
-        on_wire(stream, &cnt);
-
-        if (stream.is_write()) {
-            for (auto it = data->begin(); it != data->end(); ++it) {
-                on_wire(stream, &*it);
-            }
-        } else {
-            for (int i = 0; i < cnt; ++i) {
-                _Base p;
-                on_wire(stream, &p);
-                data->push_back(p);
-            }
-        }
-    }
-
 };
 
 }

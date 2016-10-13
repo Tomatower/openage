@@ -2,6 +2,10 @@
 
 #pragma once
 
+#include "packet.h"
+
+#include "../log/named_logsource.h"
+
 #include <deque>
 #include <string>
 #include <vector>
@@ -35,8 +39,10 @@ public:
 
     /** \brief C'tor
      */
-    SerializerStream() :
-        is_write_{true} {}
+    SerializerStream(openage::log::NamedLogSource &log) :
+        is_write_{true},
+        logsink{log}
+	{}
 
 
     /** \brief Write data to the end of the stream
@@ -60,23 +66,6 @@ public:
 
     ///@TODO add more basic datatypes - maybe templated?
 
-    /** \brief write / read int data
-     *
-     * \param data int*
-     * \return SerializerStream&
-     *
-     */
-    SerializerStream &on_wire(int *data);
-
-
-    /** \brief write / read string data
-     *
-     * \param data std::string*
-     * \return SerializerStream&
-     *
-     */
-    SerializerStream &on_wire(std::string *data);
-
     /** \brief Drop all saved data.
      *
      * \return void
@@ -91,7 +80,7 @@ public:
      *
      */
     void set_data(const std::vector<int8_t> &buffer);
-
+	void set_data(int8_t *start, size_t count);
     /** \brief Get the serialized data from the package again.
      *
      * This buffer can be immediately fed back into the @see set_data method
@@ -100,7 +89,8 @@ public:
      * \return void
      *
      */
-    void get_data(std::vector<int8_t> &buffer) const;
+    size_t get_data(std::vector<int8_t> &buffer) const;
+	size_t get_data(int8_t *start, size_t max_len);
 
     /** \brief Set if the stream is currently configured for reading or writing
      *
@@ -124,9 +114,57 @@ public:
      *
      */
     size_t size();
+
+    SerializerStream &on_wire(Packet *);
+
+    SerializerStream &on_wire(int32_t *data);
+    SerializerStream &on_wire(std::string *data);
+    SerializerStream &on_wire(uint16_t *data);
+
+    SerializerStream &on_wire(Packet::input *data);
+    SerializerStream &on_wire(Packet::nyanchange *data);
+    SerializerStream &on_wire(Packet::object_state *data);
+    SerializerStream &on_wire(Packet::trajectory_element *data);
+
+    SerializerStream &map_on_wire(std::unordered_map<int, int> *data);
+
+    template <typename _Base>
+    SerializerStream &deque_on_wire(std::deque<_Base> *data) {
+        int32_t cnt = data->size();
+        this->on_wire(&cnt);
+
+        if (this->is_write()) {
+            for (auto it = data->begin(); it != data->end(); ++it) {
+                this->on_wire(&*it);
+            }
+        } else {
+            for (int i = 0; i < cnt; ++i) {
+                _Base p;
+                this->on_wire(&p);
+                data->push_back(p);
+            }
+        }
+        return *this;
+    }
+
+
+    /** \brief write data, but keep the beginning of the write operation as return.
+     *
+     * DO NOT USE THIS except you know exactly what you are doing.
+     * This can be used for example to track the count parameter when inserting a unknown number of objects into the
+     * stream, but should be encoded that the number preceeds the objects.
+     *
+     * \param data int8_t* Data to be written
+     * \param size size_t Size of the data to be written
+     * \return int8_t* Pointer to the beginning of the data written
+     *
+     */
+    int8_t *write_observable(int8_t *data, size_t size);
+
 private:
     std::deque<int8_t> buffer;
     bool is_write_;
+	openage::log::NamedLogSource &logsink;
 };
 
 }

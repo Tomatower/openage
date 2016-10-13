@@ -4,6 +4,7 @@
 #include "packet.h"
 #include "packetbuilder.h"
 #include "serializerstream.h"
+#include "wiremanager.h"
 
 #include "../testing/testing.h"
 
@@ -47,36 +48,19 @@ static bool operator == (Packet &a, Packet &b) {
 		}
 	}
 
-	if (a.static_states.size() != b.static_states.size()) {
-		TESTFAILMSG("statics size");
+	if (a.object_states.size() != b.object_states.size()) {
+		TESTFAILMSG("objects size");
 		return false;
 	}
 
-	for (auto ia = a.static_states.begin(), ib = b.static_states.begin();
-	     ia != a.static_states.end() && ib != b.static_states.end();
+	for (auto ia = a.object_states.begin(), ib = b.object_states.begin();
+	     ia != a.object_states.end() && ib != b.object_states.end();
 	     ++ia, ++ib) {
 		if (ia->id != ib->id
 		    || ia->x != ib->x
 		    || ia->y != ib->y
 		    || ia->kv_state != ib->kv_state) {
-			TESTFAILMSG("statics");
-			return false;
-		}
-	}
-
-	if (a.dynamic_states.size() != b.dynamic_states.size()) {
-		TESTFAILMSG("dynamics size");
-		return false;
-	}
-
-	for (auto ia = a.dynamic_states.begin(), ib = b.dynamic_states.begin();
-	     ia != a.dynamic_states.end() && ib != b.dynamic_states.end();
-	     ++ia, ++ib) {
-		if (ia->id != ib->id
-		    || ia->x != ib->x
-		    || ia->y != ib->y
-		    || ia->kv_state != ib->kv_state) {
-			TESTFAILMSG("dynamics");
+			TESTFAILMSG("objects");
 			return false;
 		}
 
@@ -120,16 +104,7 @@ Packet generate_dummy_packet() {
 	}
 
 	for (int i = 0; i < 10; ++i) {
-		Packet::static_state ss;
-		ss.x = 1;
-		ss.y = i;
-		ss.id = i + 5;
-		p.static_states.push_back(ss);
-		//EMPTY KV MAP
-	}
-
-	for (int i = 0; i < 10; ++i) {
-		Packet::dynamic_state ds;
+		Packet::object_state ds;
 		ds.x = 1;
 		ds.y = i;
 		ds.id = i + 5;
@@ -142,7 +117,7 @@ Packet generate_dummy_packet() {
 
 			ds.trajectory.push_back(te);
 		}
-		p.dynamic_states.push_back(ds);
+		p.object_states.push_back(ds);
 		//EMPTY KV MAP
 	}
 
@@ -158,6 +133,8 @@ void test_test() {
 		TESTFAILMSG("p1 == p2");
 	}
 
+	log::message m = ERR << "Message";
+
 	p1.inputs.front().player = 2;
 	TESTTHROWS(p1 == p2);
 }
@@ -165,9 +142,10 @@ void test_test() {
 
 void serializer_test() {
 	// Test serialize / deserialize in the same stream
+	log::NamedLogSource log("SerializerTest");
 	{
 		Packet pin = generate_dummy_packet();
-		SerializerStream ss;
+		SerializerStream ss(log);
 
 		Packet pout;
 		pin.to_stream(ss);
@@ -183,17 +161,14 @@ void serializer_test() {
 		Packet pin = generate_dummy_packet();
 		Packet pout;
 		{
-			SerializerStream ss;
+			SerializerStream ss(log);
 			pin.to_stream(ss);
 
 			ss.get_data(buffer);
-
-			if (pin.serialized_size() != buffer.size())
-				TESTFAILMSG("Serialized size calculation failed");
 		}
 
 		{
-			SerializerStream ss;
+			SerializerStream ss(log);
 			ss.set_data(buffer);
 			pout.from_stream(ss);
 		}
@@ -204,6 +179,55 @@ void serializer_test() {
 	}
 }
 
+class dummy_object_state_provider {
+	int cnt, start, max;
+public:
+	dummy_object_state_provider(int start, int max) : cnt {start}, start{start}, max{max}
+	{};
+
+	void reset() {
+		cnt = start;
+	}
+
+	bool operator() (Packet::object_state* s) {
+		s->id = cnt;
+		cnt ++;
+		return cnt < max;
+	}
+};
+
+
+void wiremanager_singleframe_test() {
+	dummy_object_state_provider provider(0, 5);
+	log::NamedLogSource log("SingleFrameTest");
+
+	log.log(INFO << "SingleFrameTest");
+
+	WireManager wm1(log, provider);
+	{
+		Packet::input i;
+		i.player = 5;
+		wm1.input(i);
+	}
+
+	//The Serializer stream poses as "network"
+	SerializerStream ss(log);
+	ss.set_write_mode(true);
+	wm1.on_wire(ss);
+
+	dummy_object_state_provider provider2(200, 5);
+	WireManager wm2(log, provider2);
+    ss.set_write_mode(false);
+    wm2.on_wire(ss);
+
+	if (!(*wm1.get_frame_packet(0) == *wm2.get_frame_packet(0))) {
+		TESTFAILMSG("pin == pout with wire manager");
+	}
+}
+
+void wiremanager_multiframe_test() {
+
+}
 
 void handshake_test() {
 	//TESTFAILMSG("NOT IMPLEMENTED YET");
@@ -211,7 +235,8 @@ void handshake_test() {
 
 	Interface client("localhost", 9001, InterfaceType::CLIENT);
 
-	while (1) {
+	//TODO create a timeout (e.g. 1 second?)
+	while (server.connected_players().empty()) {
 		server.game_loop();
 		client.game_loop();
 	}
@@ -224,6 +249,8 @@ void game_mode_test() {
 void test() {
 	test_test();
 	serializer_test();
+	wiremanager_singleframe_test();
+	wiremanager_multiframe_test();
 	handshake_test();
 	game_mode_test();
 }

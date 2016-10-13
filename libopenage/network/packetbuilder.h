@@ -1,5 +1,5 @@
 // Copyright 2016-2016 the openage authors. See copying.md for legal info.
-
+#if 0
 #pragma once
 
 #include <functional>
@@ -69,3 +69,4 @@ private:
 
 }
 } //namespace openage::network
+#endif

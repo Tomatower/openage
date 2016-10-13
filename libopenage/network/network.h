@@ -143,8 +143,12 @@ public:
 	State state;
 
 	sockaddr_storage src_addr;
+	socklen_t src_addr_len;
+
 
 	std::unique_ptr<WireManager> wire;
+
+	std::unique_ptr<HandshakeManager> handshake;
 
 	/**
 	 * The associated player
@@ -168,6 +172,19 @@ enum class InterfaceType {
 class Interface {
 public:
 
+	enum class ProtocolIdentifier {
+		HANDSHAKE_MESSAGE_V0 = 0,
+		GAME_MESSAGE_V0 = 1,
+	};
+
+	class SockaddrHasher {
+	public:
+		size_t operator() (const sockaddr_storage &socka) const;
+		bool operator() (const sockaddr_storage &a, const sockaddr_storage &b) const;
+	};
+
+	typedef std::unordered_map<sockaddr_storage, std::shared_ptr<Host>, SockaddrHasher, SockaddrHasher> host_pool;
+
 	/** @brief C'tor, get connection information
 	 *
 	 * @param remote uri of the remote server.
@@ -180,29 +197,6 @@ public:
 	           InterfaceType type);
 
 	~Interface();
-
-	/** @brief top of network packet stack
-	 *
-	 * The network packets are managed in form of a packet stack.
-	 * this method gives the top of the stack, maybe filtered over multiple packages in the jitter buffer.
-	 *
-	 * whenever this method returns nullptr multiple times in a row, it is to be expected that the network
-	 * has problems.
-	 *
-	 * @return top of network stack or nullptr, if no packet for the next frame was received.
-	 *
-	 */
-	std::shared_ptr<Packet> current_packet();
-
-	/** @brief pop the top of network packet stack
-	 *
-	 * To move on to the next packet in the stack, you have to pop the next packet.
-	 * even if the last call to @see current_packet has returned nullptr, this may activate more packages in the stack
-	 *
-	 * @return void
-	 *
-	 */
-	void pop_packet();
 
 	/** @brief get a state string
 	 *
@@ -220,7 +214,7 @@ public:
 	 * @return const std::deque<Host *>& list of connected players
 	 *
 	 */
-	const std::deque<std::unique_ptr<Host>> &connected_players() const;
+	const host_pool &connected_players() const;
 
 	/** @brief start the service/event handling
 	 *
@@ -246,7 +240,7 @@ public:
      * \return Event*
      *
      */
-	Event *get_event(int id) const;
+	const std::unique_ptr<Event> &get_event(int id) const;
 
 	/** @brief Send the prepared message to the remote
 	 *
@@ -283,11 +277,16 @@ private:
 	void setup_client(const std::string &remote, short port);
 	void setup_server(short port);
 
-	std::shared_ptr<Host> get_host(const sockaddr &addr, bool pending_allowed);
+	std::shared_ptr<Host> get_host(const sockaddr_storage &addr);
 
-	void log(log::message, std::string text, bool fatal = false, int err = 0);
+	void log(log::MessageBuilder, std::string text, bool fatal = false, int err = 0);
+
+	void send_buffer(const std::shared_ptr<Host> &to, const std::vector<int8_t> &buffer, int size);
+
+
 
 private:
+	int16_t port;
 	std::string remote;
 	std::string addr;
 
@@ -295,18 +294,14 @@ private:
 
 	std::deque<std::unique_ptr<Event>> events;
 
-	class SockaddrHasher {
-	public:
-		size_t operator() (const sockaddr_storage &socka) const;
-		bool operator() (const sockaddr_storage &a, const sockaddr_storage &b) const;
-	};
+	host_pool connected;
+	host_pool handshake_pending;
 
-	std::unordered_map<sockaddr_storage, std::unique_ptr<Host>, SockaddrHasher> connected;
-	std::unordered_map<sockaddr_storage, std::unique_ptr<Host>, SockaddrHasher> handshake_pending;
-
-	std::vector<int8_t> network_buffer;
 
 	int gameloop_socket; //My UDP socket
+
+	SerializerStream serializer;
+	std::vector<int8_t> network_buffer;
 
 	bool is_server;
 

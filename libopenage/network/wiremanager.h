@@ -19,10 +19,9 @@ namespace network {
  */
 class WireManager {
 public:
-	typedef std::function<bool(Packet::static_state*)> static_state_provider;
-    typedef std::function<bool(Packet::dynamic_state*)> dynamic_state_provider;
+	typedef std::function<bool(Packet::object_state*)> object_provider;
 
-	WireManager(openage::log::NamedLogSource &, static_state_provider, dynamic_state_provider);
+	WireManager(openage::log::NamedLogSource &, object_provider);
 
     /** @brief append a nyan change
      *
@@ -54,8 +53,7 @@ public:
 	std::shared_ptr<Packet> get_frame_packet(int frame);
 
 private:
-	static_state_provider static_provider;
-    dynamic_state_provider dynamic_provider;
+	object_provider object_provider;
 	openage::log::NamedLogSource &logsink;
 
 

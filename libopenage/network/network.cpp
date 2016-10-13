@@ -28,6 +28,7 @@ size_t Interface::SockaddrHasher::operator() (const sockaddr_storage &socka) con
 		return openage::util::hash_combine(((size_t*)((sockaddr_in6*)&socka)->sin6_addr.s6_addr)[0],
 										   ((size_t*)((sockaddr_in6*)&socka)->sin6_addr.s6_addr)[1]);
 	}
+	return 0; //TODO Fail epically
 }
 
 
@@ -38,15 +39,17 @@ bool Interface::SockaddrHasher::operator () (const sockaddr_storage &a, const so
 
 Interface::Interface(const std::string& remote, short port, InterfaceType type) :
 	remote(remote),
+	port(port),
 	logsink( type == InterfaceType::SERVER ? "SRV" : "NET"),
 	gameloop_socket{-1},
+	serializer{logsink},
 	network_buffer(100000, 0),
 	is_server{ type == InterfaceType::SERVER }
 {
-	if (is_server) {
-		setup_server(port);
+	if (this->is_server) {
+		this->setup_server(port);
 	} else {
-		setup_client(remote, port);
+		this->setup_client(this->remote, this->port);
 	}
 
 }
@@ -54,6 +57,127 @@ Interface::Interface(const std::string& remote, short port, InterfaceType type) 
 
 Interface::~Interface() {
 	close(gameloop_socket);
+}
+
+
+std::string Interface::get_state() const {
+	return this->state.text;
+}
+
+
+const Interface::host_pool &Interface::connected_players() const {
+	return this->connected;
+}
+
+
+void Interface::begin_service() {
+	//Receive the stuff, fill event buffer
+	sockaddr_storage src_addr;
+
+	bool pending = true;
+	SerializerStream ss(logsink);
+	ss.set_write_mode(false); // we dont write to the stream
+	while (pending) {
+		unsigned int addr_len = sizeof(src_addr);
+		int retval = recvfrom(this->gameloop_socket, &this->network_buffer[0], this->network_buffer.size(),
+				MSG_DONTWAIT,
+				(sockaddr*)&src_addr, &addr_len);
+
+		if (retval == -1) {
+            switch(errno) {
+			case EAGAIN:
+				pending = false;
+				break;
+			default:
+				this->log(ERR, "recvfrom", false, errno);
+				break;
+            }
+            continue;
+		}
+
+		std::shared_ptr<Host> host = get_host(src_addr);
+		//Now we have a wonderfull package in network_buffer
+		//Maybe distinguish the type of connection from the first byte?
+
+		if (host) {
+			switch (this->network_buffer[0]) {
+			case ProtocolIdentifier::HANDSHAKE_MESSAGE_V0:
+				ss.clear();
+				ss.set_data(&this->network_buffer[1], retval-1);
+				host->handshake->on_wire(ss);
+				break;
+			case ProtocolIdentifier::GAME_MESSAGE_V0:
+				ss.clear();
+				ss.set_data(&this->network_buffer[1], retval-1);
+				host->wire->on_wire(ss);
+				break;
+			}
+		} else {
+			//Check if state is in Accept Connection Mode
+
+			host = std::shared_ptr<Host>(new Host());
+			host->src_addr = src_addr;
+			host->src_addr_len = addr_len;
+
+			this->handshake_pending.insert(std::make_pair(src_addr, host));
+
+			this->log(INFO, "Recieved message from a not connected host");  //TODO handshake
+		}
+	}
+}
+
+
+size_t Interface::get_event_count() {
+	return this->events.size();
+}
+
+
+const std::unique_ptr<Event> &Interface::get_event(int id) const {
+	if ((size_t)id < this->events.size()) {
+		return *(this->events.begin() + id);
+	} else {
+		static auto null_ref = std::unique_ptr<Event>(nullptr);
+		return null_ref;
+	}
+}
+
+
+void Interface::handle(std::shared_ptr<Host> host) {
+	this->serializer.clear();
+	this->serializer.set_write_mode(true);
+	host->wire->on_wire(serializer);
+
+    //TODO Check size
+    size_t size = this->serializer.get_data(this->network_buffer);
+	this->send_buffer(host, this->network_buffer, size);
+}
+
+
+void Interface::end_service() {
+	//Send replies in handshake mode
+}
+
+
+void Interface::game_loop() {
+	this->begin_service();
+	//TODO Do fancy stuff with the messages received
+
+	for (size_t i = 0; i < this->get_event_count(); ++i) {
+        const auto &e = this->get_event(i);
+	}
+
+	for (auto p : this->connected_players()) {
+		//TODO Insert Input & Nyan
+
+		this->handle(p.second);
+	}
+
+	this->end_service();
+}
+
+
+void Interface::lobby_loop() {
+
 }
 
 
@@ -81,32 +205,32 @@ void Interface::setup_client(const std::string &remote, short port) {
 
 
 	for (struct addrinfo *res = servinfo;
-	     gameloop_socket < 0 && res != nullptr;
+	     this->gameloop_socket < 0 && res != nullptr;
 	     res = res->ai_next)
 	{
 		char addr_str[INET6_ADDRSTRLEN];
 		inet_ntop(res->ai_family,res->ai_addr, addr_str, sizeof (addr_str));
-		addr = addr_str;
+		this->addr = addr_str;
 
-		gameloop_socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-		if (gameloop_socket < 0) {
-			log(INFO, "socket()", false, errno);
+		this->gameloop_socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+		if (this->gameloop_socket < 0) {
+			this->log(INFO, "socket()", false, errno);
 			continue;
 		}
 
-		if (connect(gameloop_socket, res->ai_addr, res->ai_addrlen) < 0) {
-			log(INFO, "connect()", false, errno);
+		if (connect(this->gameloop_socket, res->ai_addr, res->ai_addrlen) < 0) {
+			this->log(INFO, "connect()", false, errno);
 			continue;
 		}
 
-		log(INFO, "connected successfully", false);
+		this->log(INFO, "connected successfully", false);
 		break;
 	}
 	freeaddrinfo(servinfo); // free the linked-list
 
-	if (gameloop_socket < 0) {
+	if (this->gameloop_socket < 0) {
 		//Something failed
-		log(ERR, "failed to connect: ", true, errno);
+		this->log(ERR, "failed to connect: ", true, errno);
 	}
 }
 
@@ -127,157 +251,72 @@ void Interface::setup_server(short port) {
 	int status;
 	struct addrinfo *servinfo;
 	if ((status = getaddrinfo(NULL, portstring.c_str(), &hints, &servinfo)) != 0) {
-		log(ERR, std::string("getaddrinfo()") + gai_strerror(status), true);
+		this->log(ERR, std::string("getaddrinfo()") + gai_strerror(status), true);
 	}
 
 
 	for (struct addrinfo *res = servinfo;
-	     gameloop_socket < 0 && res != nullptr;
+	     this->gameloop_socket < 0 && res != nullptr;
 	     res = res->ai_next)
 	{
-		gameloop_socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-		if (gameloop_socket < 0) {
+		this->gameloop_socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+		if (this->gameloop_socket < 0) {
 			log(INFO, "socket()", false, errno);
 			continue;
 		}
 
-		if (bind(gameloop_socket, res->ai_addr, res->ai_addrlen) < 0) {
+		if (bind(this->gameloop_socket, res->ai_addr, res->ai_addrlen) < 0) {
 			log(INFO, "bind()", false, errno);
 			continue;
 		}
 
-		log(INFO, "Started Successfully", false);
+		this->log(INFO, "Started Successfully", false);
 		break;
 	}
 
-	if (gameloop_socket < 0) {
+	if (this->gameloop_socket < 0) {
 		//Something failed
-		log(ERR, "failed to start", true, errno);
+		this->log(ERR, "failed to start", true, errno);
 	}
 	freeaddrinfo(servinfo); // free the linked-list
 
 	int yes = 1;
 	// lose the pesky "Address already in use" error message
-	if (setsockopt(gameloop_socket,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof yes) == -1) {
+	if (setsockopt(this->gameloop_socket,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof yes) == -1) {
 		//Something failed
-		log(ERR, "setsockopt(SO_REUSEADDR)", true, errno);
+		this->log(ERR, "setsockopt(SO_REUSEADDR)", true, errno);
 	}
 
 	//Now we have a working socket in gameloop_socket
 }
 
 
-void Interface::pop_packet() {
-	for (auto it = jitter_buffer.begin(); it != jitter_buffer.end(); ++it) {
-		if ((*it)->_server_frame == current_packet_frame) {
-			pool.push_back(*it);
-			jitter_buffer.erase(it);
-			break;
+std::shared_ptr<Host> Interface::get_host(const sockaddr_storage &addr) {
+	host_pool::iterator it = this->connected.find(addr);
+	if (it == this->connected.end()) {
+		it = this->handshake_pending.find(addr);
+		if (it == this->handshake_pending.end()) {
+			return std::shared_ptr<Host>(nullptr);
 		}
 	}
-	current_packet_frame ++;
+	return it->second;
 }
 
 
-std::string Interface::get_state() const {
-	return state.text;
-}
-
-
-const std::deque<std::unique_ptr<Host>>& Interface::connected_players() const {
-	return connected;
-}
-
-
-void Interface::begin_service() {
-	//Receive the stuff, fill event buffer
-	sockaddr src_addr;
-
-	bool pending = true;
-	while (pending) {
-		unsigned int addr_len = sizeof(src_addr);
-		int retval = recvfrom(gameloop_socket, &network_buffer[0], network_buffer.size(),
-				MSG_DONTWAIT,
-				&src_addr, &addr_len);
-
-		if (retval == -1) {
-            switch(errno) {
-			case EAGAIN:
-				pending = false;
-				break;
-			default:
-				log(ERR, "RECV", false, errno);
-				break;
-            }
-            continue;
-		}
-
-		std::shared_ptr<Host> host = get_host(src_addr);
-		//Now we have a wonderfull package in network_buffer
-		if (host) {
-			host->wire->from_wire(network_buffer, retval);
-		} else {
-			log(INFO, "Recieved message from a not connected host");  //TODO handshake
-		}
-	}
-
-
-}
-
-
-size_t Interface::get_event_count() {
-	return events.size();
-}
-
-
-Event* Interface::get_event(int id) const {
-	if (id < events.size()) {
-		return *(events.begin() + id);
+void Interface::log(log::MessageBuilder msg, std::string text, bool fatal, int err) {
+	if (this->is_server) {
+		msg << "";
 	} else {
-		return nullptr;
+		msg << remote << "(" << addr << "): ";
 	}
-}
-
-
-void Interface::end_service() {
-	//Send replies in handshake mode
-}
-
-
-void Interface::game_loop() {
-	begin_service();
-	//TODO Do fancy stuff with the messages received
-
-	for (int i = 0; i < get_event_count(); ++i) {
-        Event *e = get_event(i);
-
-	}
-
-	end_service();
-}
-
-
-void Interface::lobby_loop() {
-
-}
-
-
-void Interface::log(log::message msg, std::string text, bool fatal, int err) {
-	if (is_server) {
-		msg.text = "";
-	} else {
-		msg.text = remote + "(" + addr + "): ";
-	}
-	msg.text += text;
+	msg << text;
 
 	if (err) {
-		msg.text += "[";
-		msg.text += strerror(errno);
-		msg.text += "]";
+		msg << "[" << strerror(errno) << "]";
 	}
 
-	logsink.log(msg);
-	state = msg;
+	this->logsink.log(msg);
+	this->state = msg;
 
 	if (fatal) {
 		throw new openage::error::Error(msg);
@@ -285,22 +324,9 @@ void Interface::log(log::message msg, std::string text, bool fatal, int err) {
 }
 
 
-std::shared_ptr<Host> Interface::get_host(const sockaddr_storage &addr, bool pending_allowed) {
-	auto it = connected.find(addr);
-	if (it == connected.end()) {
-		if  (pending_allowed) {
-			it = handshake_pending.find(addr);
-			if (it == handshake_pending.end()) {
-				return std::shared_ptr<Host>(nullptr);
-			}
-		} else {
-			return std::shared_ptr<Host>(nullptr);
-		}
-	}
-
-	//it is now valid
-
-	return it->second;
+void Interface::send_buffer(const std::shared_ptr<Host> &to, const std::vector<int8_t> &buffer, int size) {
+	//TODO Lock
+	sendto(this->gameloop_socket, &buffer[0], size, MSG_NOSIGNAL, (sockaddr*)&to->src_addr, to->src_addr_len);
 }
 
 

@@ -1,5 +1,5 @@
 // Copyright 2016-2016 the openage authors. See copying.md for legal info.
-
+/*
 #include "packetbuilder.h"
 
 #include "packet.h"
@@ -73,3 +73,4 @@ void PacketBuilder::clear() {
 
 }
 } // openage::network
+*/
