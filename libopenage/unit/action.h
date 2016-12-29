@@ -94,7 +94,8 @@ public:
 	 * common functions for actions
 	 */
 	void face_towards(const coord::phys3 pos);
-	void damage_object(Unit &target, unsigned dmg);
+	void damage_object(Unit &target, unsigned dmg); // TODO remove (keep for testing)
+	void damage_object(Unit &target);
 	void move_to(Unit &target, bool use_range=true);
 
 	/**
@@ -113,6 +114,12 @@ public:
 	 * otherwise returns same as adjacent_range()
 	 */
 	static coord::phys_t get_attack_range(Unit *u);
+
+	/**
+	 * looks at heal attribute on the unit
+	 * otherwise returns same as adjacent_range()
+	 */
+	static coord::phys_t get_heal_range(Unit *u);
 
 protected:
 	/**
@@ -387,11 +394,13 @@ public:
 
 	void update_in_range(unsigned int time, Unit *target_unit) override;
 	bool completed_in_range(Unit *) const override { return this->complete >= 1.0f; }
+	void on_completion() override;
 	std::string name() const override { return "build"; }
 	const graphic_set &current_graphics() const override;
 
 private:
 	float complete, build_rate;
+	static constexpr float search_tile_distance = 9.0f;
 
 };
 
@@ -456,6 +465,27 @@ private:
 	 * add a projectile game object which moves towards the target
 	 */
 	void fire_projectile(const Attribute<attr_type::attack> &att, const coord::phys3 &target);
+};
+
+/**
+ * heals another unit
+ */
+class HealAction: public TargetAction {
+public:
+	HealAction(Unit *e, UnitReference tar);
+	virtual ~HealAction();
+
+	void update_in_range(unsigned int time, Unit *target_unit) override;
+	bool completed_in_range(Unit *) const override;
+	std::string name() const override { return "heal"; }
+
+private:
+	float heal_percent;
+
+	/**
+	 * use heal action
+	 */
+	void heal(Unit &target);
 };
 
 /**

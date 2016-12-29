@@ -1,5 +1,6 @@
 add_sources(libopenage
 	assetmanager_link.cpp
+	actions_list_model.cpp
 	category_contents_list_model.cpp
 	engine_link.cpp
 	game_control_link.cpp
@@ -23,3 +24,7 @@ add_subdirectory("integration")
 install(DIRECTORY "qml"
 	DESTINATION "${INSTALLED_GLOBAL_ASSET_DIR}"
 )
+
+# To show QML files in the QtCreator.
+file(GLOB QML_SRC "qml/*.qml")
+add_custom_target(qtcreator-show-qml SOURCES ${QML_SRC})

@@ -92,14 +92,33 @@ QString ActionModeLink::get_ability() const {
 	return this->ability;
 }
 
+void ActionModeLink::act(const QString &action) {
+	emit this->action_triggered(action.toStdString());
+}
+
 void ActionModeLink::on_ability_changed(const std::string &ability) {
 	this->ability = QString::fromStdString(ability);
 	emit this->ability_changed();
 }
 
+void ActionModeLink::on_buttons_type_changed(const ActionButtonsType buttons_type) {
+	emit this->buttons_type_changed(buttons_type);
+}
+
 void ActionModeLink::on_core_adopted() {
 	this->Inherits::on_core_adopted();
-	QObject::connect(&unwrap(this)->gui_signals, &ActionModeSignals::ability_changed, this, &ActionModeLink::on_ability_changed);
+	QObject::connect(&unwrap(this)->gui_signals,
+	                 &ActionModeSignals::ability_changed,
+	                 this,
+	                 &ActionModeLink::on_ability_changed);
+	QObject::connect(&unwrap(this)->gui_signals,
+	                 &ActionModeSignals::buttons_type_changed,
+	                 this,
+	                 &ActionModeLink::on_buttons_type_changed);
+	QObject::connect(this,
+	                 &ActionModeLink::action_triggered,
+	                 &unwrap(this)->gui_signals,
+	                 &ActionModeSignals::on_action);
 }
 
 EditorModeLink::EditorModeLink(QObject *parent)
@@ -179,7 +198,7 @@ GameControlLink::GameControlLink(QObject *parent)
 	GuiItem{this},
 	mode{},
 	effective_mode_index{-1},
-	mode_index{},
+	mode_index{-1},
 	engine{},
 	game{},
 	current_civ_index{} {
@@ -222,7 +241,7 @@ int GameControlLink::get_mode_index() const {
 
 void GameControlLink::set_mode_index(int mode) {
 	static auto f = [] (GameControl *_this, int mode) {
-		_this->set_mode(mode);
+		_this->set_mode(mode, true);
 	};
 
 	this->sf(f, this->mode_index, mode);
@@ -293,6 +312,7 @@ void GameControlLink::on_modes_changed(OutputMode *mode, int mode_index) {
 	this->i(f, this->mode_index);
 
 	this->on_mode_changed(mode, mode_index);
+	emit this->modes_changed();
 }
 
 void GameControlLink::on_current_player_name_changed(const std::string &current_player_name) {

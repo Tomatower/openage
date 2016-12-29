@@ -29,6 +29,15 @@ coord::phys_t UnitAction::get_attack_range(Unit *u) {
 	return range;
 }
 
+coord::phys_t UnitAction::get_heal_range(Unit *u) {
+	coord::phys_t range = adjacent_range(u);
+	if (u->has_attribute(attr_type::heal)) {
+		auto &heal = u->get_attribute<attr_type::heal>();
+		range += heal.range;
+	}
+	return range;
+}
+
 UnitAction::UnitAction(Unit *u, graphic_type initial_gt)
 	:
 	entity{u},
@@ -87,14 +96,51 @@ void UnitAction::face_towards(const coord::phys3 pos) {
 	}
 }
 
+// TODO remove (keep for testing)
 void UnitAction::damage_object(Unit &target, unsigned dmg) {
 	if (target.has_attribute(attr_type::hitpoints)) {
 		auto &hp = target.get_attribute<attr_type::hitpoints>();
-		if ((hp.current - dmg) > 0) {
+		if (hp.current > dmg) {
 		    hp.current -= dmg;
 		}
 		else {
 		    hp.current = 0;
+		}
+	}
+}
+
+void UnitAction::damage_object(Unit &target) {
+	if (target.has_attribute(attr_type::hitpoints)) {
+		auto &hp = target.get_attribute<attr_type::hitpoints>();
+
+		if (target.has_attribute(attr_type::armor) && this->entity->has_attribute(attr_type::attack)) {
+			auto &armor = target.get_attribute<attr_type::armor>().armor;
+			auto &damage = this->entity->get_attribute<attr_type::attack>().damage;
+
+			unsigned int actual_damage = 0;
+			for (const auto &pair : armor) {
+				auto search = damage.find(pair.first);
+				if (search != damage.end()) {
+					if (pair.second < search->second) {
+						actual_damage += search->second - pair.second;
+					}
+				}
+			}
+			// TODO add elevation modifier here
+			if (actual_damage < 1) {
+				actual_damage = 1;
+			}
+
+			if (hp.current > actual_damage) {
+				hp.current -= actual_damage;
+			}
+			else {
+				hp.current = 0;
+			}
+		}
+		else {
+			// TODO remove (keep for testing)
+			damage_object(target, 1);
 		}
 	}
 }
@@ -399,7 +445,7 @@ void IdleAction::on_completion() {}
 bool IdleAction::completed() const {
 	if (this->entity->has_attribute(attr_type::hitpoints)) {
 		auto &hp = this->entity->get_attribute<attr_type::hitpoints>();
-		return hp.current <= 0.0f;
+		return hp.current == 0;
 	}
 	else if (this->entity->has_attribute(attr_type::resource)) {
 		auto &res_attr = this->entity->get_attribute<attr_type::resource>();
@@ -757,6 +803,31 @@ void BuildAction::update_in_range(unsigned int time, Unit *target_unit) {
 	this->frame += time * this->frame_rate / 2.5f;
 }
 
+void BuildAction::on_completion() {
+	if (this->get_target().get()->get_attribute<attr_type::building>().completed < 1.0f) {
+		// The BuildAction was just aborted and we shouldn't look for new buildings
+		return;
+	}
+	this->entity->log(MSG(dbg) << "Done building, searching for new building");
+	auto valid = [this](const TerrainObject &obj) {
+		if (!obj.unit.has_attribute(attr_type::building) ||
+		    obj.unit.get_attribute<attr_type::building>().completed >= 1.0f) {
+			return false;
+		}
+		this->entity->log(MSG(dbg) << "Found unit " << obj.unit.logsource_name());
+		return true;
+	};
+
+	TerrainObject *new_target = find_in_radius(*this->entity->location, valid, BuildAction::search_tile_distance);
+	if (new_target != nullptr) {
+		this->entity->log(MSG(dbg) << "Found new building, queueing command");
+		Command cmd(this->entity->get_attribute<attr_type::owner>().player, &new_target->unit);
+		this->entity->queue_cmd(cmd);
+	} else {
+		this->entity->log(MSG(dbg) << "Didn't find new building");
+	}
+}
+
 const graphic_set &BuildAction::current_graphics() const {
 	if (this->entity->has_attribute(attr_type::gatherer)) {
 
@@ -971,7 +1042,7 @@ void AttackAction::attack(Unit &target) {
 		this->fire_projectile(attack, target.location->pos.draw);
 	}
 	else {
-		this->damage_object(target, 1);
+		this->damage_object(target);
 	}
 }
 
@@ -997,6 +1068,53 @@ void AttackAction::fire_projectile(const Attribute<attr_type::attack> &att, cons
 	else {
 		this->entity->log(MSG(dbg) << "projectile launch failed");
 	}
+}
+
+
+HealAction::HealAction(Unit *e, UnitReference tar)
+	:
+	TargetAction{e, graphic_type::heal, tar, get_attack_range(e)},
+	heal_percent{0.0f} {
+
+}
+
+HealAction::~HealAction() {}
+
+void HealAction::update_in_range(unsigned int time, Unit *target_ptr) {
+	auto &heal = this->entity->get_attribute<attr_type::heal>();
+
+	if (this->heal_percent > 0.0) {
+		this->heal_percent -= heal.rate * time;
+	}
+	else {
+		this->heal_percent += 1.0f;
+		this->heal(*target_ptr);
+	}
+
+	// inc frame
+	this->frame += time * this->current_graphics().at(graphic)->frame_count * heal.rate;
+}
+
+bool HealAction::completed_in_range(Unit *target_ptr) const {
+	auto &h_attr = target_ptr->get_attribute<attr_type::hitpoints>();
+	return h_attr.current >= h_attr.max; // is unit at full hitpoints?
+}
+
+void HealAction::heal(Unit &target) {
+	auto &heal = this->entity->get_attribute<attr_type::heal>();
+
+	// TODO move to seperate function heal_object (like damage_object)?
+	// heal object
+	if (target.has_attribute(attr_type::hitpoints)) {
+		auto &hp = target.get_attribute<attr_type::hitpoints>();
+		if ((hp.current + heal.life) < hp.max) {
+			hp.current += heal.life;
+		}
+		else {
+			hp.current = hp.max;
+		}
+	}
+
 }
 
 

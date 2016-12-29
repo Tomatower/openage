@@ -42,6 +42,7 @@ enum class graphic_type {
 	walking,
 	carrying,
 	attack,
+	heal,
 	work
 };
 
@@ -58,7 +59,9 @@ using graphic_set = std::map<graphic_type, std::shared_ptr<UnitTexture>>;
 enum class attr_type {
 	owner,
 	hitpoints,
+	armor,
 	attack,
+	heal,
 	speed,
 	direction,
 	projectile,
@@ -112,6 +115,11 @@ public:
 
 using attr_map_t = std::map<attr_type, std::shared_ptr<AttributeContainer>>;
 
+/**
+ * An unordered_map with a int key used as a type id
+ * and a unsigned int value used as the amount
+ */
+using typeamount_map = std::unordered_map<int, unsigned int>;
 
 /**
  * return attribute from a container
@@ -149,7 +157,7 @@ public:
 	Attribute(unsigned int i)
 		:
 		AttributeContainer{attr_type::hitpoints},
-		current{static_cast<int>(i)},
+		current{i},
 		max{i} {}
 
 	bool shared() const override {
@@ -160,14 +168,38 @@ public:
 		return std::make_shared<Attribute<attr_type::hitpoints>>(*this);
 	}
 
-	int current; // can become negative
+	unsigned int current;
 	unsigned int max;
 	float hp_bar_height;
 };
 
+template<> class Attribute<attr_type::armor>: public AttributeContainer {
+public:
+	Attribute(typeamount_map a)
+		:
+		AttributeContainer{attr_type::armor},
+		armor{a} {}
+
+	bool shared() const override {
+		return true;
+	}
+
+	std::shared_ptr<AttributeContainer> copy() const override {
+		return std::make_shared<Attribute<attr_type::armor>>(*this);
+	}
+
+	typeamount_map armor;
+};
+
 template<> class Attribute<attr_type::attack>: public AttributeContainer {
 public:
+	// TODO remove (keep for testing)
+	// 4 = gamedata::hit_class::UNITS_MELEE (not exported at the moment)
 	Attribute(UnitType *type, coord::phys_t r, coord::phys_t h, unsigned int d, UnitType *reset_type)
+		:
+		Attribute{type, r, h, {{4, d}}, reset_type} {}
+
+	Attribute(UnitType *type, coord::phys_t r, coord::phys_t h, typeamount_map d, UnitType *reset_type)
 		:
 		AttributeContainer{attr_type::attack},
 		ptype{type},
@@ -191,12 +223,38 @@ public:
 	UnitType *ptype; // projectile type
 	coord::phys_t range;
 	coord::phys_t init_height;
-	unsigned int damage;
+	typeamount_map damage;
 	attack_stance stance;
 
+	// TODO move elsewhere in order to become shared attribute
 	// used to change graphics back to normal for villagers
 	UnitType *attack_type;
 };
+
+template<> class Attribute<attr_type::heal>: public AttributeContainer {
+public:
+	Attribute(coord::phys_t r, coord::phys_t h, unsigned int l, float ra)
+		:
+		AttributeContainer{attr_type::heal},
+		range{r},
+		init_height{h},
+		life{l},
+		rate{ra} {}
+
+	bool shared() const override {
+		return true;
+	}
+
+	std::shared_ptr<AttributeContainer> copy() const override {
+		return std::make_shared<Attribute<attr_type::heal>>(*this);
+	}
+
+	coord::phys_t range;
+	coord::phys_t init_height; // TODO remove?
+	unsigned int life;
+	float rate;
+};
+
 
 template<> class Attribute<attr_type::speed>: public AttributeContainer {
 public:
@@ -206,7 +264,7 @@ public:
 		unit_speed{sp} {}
 
 	bool shared() const override {
-		return false;
+		return true;
 	}
 
 	std::shared_ptr<AttributeContainer> copy() const override {
@@ -297,7 +355,7 @@ public:
 		resource_types{types} {}
 
 	bool shared() const override {
-		return false;
+		return true;
 	}
 
 	std::shared_ptr<AttributeContainer> copy() const override {
