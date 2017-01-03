@@ -11,6 +11,7 @@
 #include <memory.h>
 
 #include "packet.h"
+#include "serializerstream.h"
 
 #include "../error/error.h"
 #include "../log/log.h"
@@ -42,7 +43,7 @@ Interface::Interface(const std::string& remote, short port, InterfaceType type) 
 	port(port),
 	logsink( type == InterfaceType::SERVER ? "SRV" : "NET"),
 	gameloop_socket{-1},
-	serializer{logsink},
+	serializer{new SerializerStream(logsink)},
 	network_buffer(100000, 0),
 	is_server{ type == InterfaceType::SERVER }
 {
@@ -51,7 +52,6 @@ Interface::Interface(const std::string& remote, short port, InterfaceType type) 
 	} else {
 		this->setup_client(this->remote, this->port);
 	}
-
 }
 
 
@@ -79,9 +79,12 @@ void Interface::begin_service() {
 	ss.set_write_mode(false); // we dont write to the stream
 	while (pending) {
 		unsigned int addr_len = sizeof(src_addr);
-		int retval = recvfrom(this->gameloop_socket, &this->network_buffer[0], this->network_buffer.size(),
-				MSG_DONTWAIT,
-				(sockaddr*)&src_addr, &addr_len);
+		int retval = recvfrom(this->gameloop_socket,
+					&this->network_buffer[0],
+					this->network_buffer.size(),
+					MSG_DONTWAIT,
+					(sockaddr*)&src_addr, &addr_len
+				);
 
 		if (retval == -1) {
             switch(errno) {
@@ -96,20 +99,20 @@ void Interface::begin_service() {
 		}
 
 		std::shared_ptr<Host> host = get_host(src_addr);
-		//Now we have a wonderfull package in network_buffer
-		//Maybe distinguish the type of connection from the first byte?
 
+		// Now we have a wonderfull package in network_buffer
+		// Maybe distinguish the type of connection from the first byte?
 		if (host) {
 			switch (this->network_buffer[0]) {
 			case ProtocolIdentifier::HANDSHAKE_MESSAGE_V0:
 				ss.clear();
 				ss.set_data(&this->network_buffer[1], retval-1);
-				host->handshake->on_wire(ss);
+				host->handshake->from_wire(ss);
 				break;
 			case ProtocolIdentifier::GAME_MESSAGE_V0:
 				ss.clear();
 				ss.set_data(&this->network_buffer[1], retval-1);
-				host->wire->on_wire(ss);
+				host->wire->from_wire(ss);
 				break;
 			}
 		} else {
@@ -143,12 +146,12 @@ const std::unique_ptr<Event> &Interface::get_event(int id) const {
 
 
 void Interface::handle(std::shared_ptr<Host> host) {
-	this->serializer.clear();
-	this->serializer.set_write_mode(true);
-	host->wire->on_wire(serializer);
+	this->serializer->clear();
+	this->serializer->set_write_mode(true);
+	host->wire->to_wire(*serializer);
 
     //TODO Check size
-    size_t size = this->serializer.get_data(this->network_buffer);
+    size_t size = this->serializer->get_data(this->network_buffer);
 	this->send_buffer(host, this->network_buffer, size);
 }
 
@@ -164,6 +167,10 @@ void Interface::game_loop() {
 
 	for (size_t i = 0; i < this->get_event_count(); ++i) {
         const auto &e = this->get_event(i);
+
+		e;
+		///TODO Handle Events
+
 	}
 
 	for (auto p : this->connected_players()) {
@@ -173,11 +180,6 @@ void Interface::game_loop() {
 	}
 
 	this->end_service();
-}
-
-
-void Interface::lobby_loop() {
-
 }
 
 

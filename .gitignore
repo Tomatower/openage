@@ -21,6 +21,7 @@ __pycache__
 # build system
 /bin
 /.bin
+/build
 
 # root dir run script
 /run

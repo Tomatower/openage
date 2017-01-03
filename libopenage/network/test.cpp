@@ -14,7 +14,7 @@ namespace tests {
 
 static bool operator == (Packet &a, Packet &b) {
 	if (a.inputs.size() != b.inputs.size()) {
-		TESTFAILMSG("inputs size");
+		//TESTFAILMSG("inputs size");
 		return false;
 	}
 
@@ -24,18 +24,18 @@ static bool operator == (Packet &a, Packet &b) {
 		if (ia->player != ib->player
 		    || ia->target_id != ib->target_id
 		    || ia->action_id != ib->action_id) {
-			TESTFAILMSG("inputs");
+			//TESTFAILMSG("inputs");
 			return false;
 		}
 
 		if (ia->kv_info != ib->kv_info) {
-			TESTFAILMSG("inputs kv");
+			//TESTFAILMSG("inputs kv");
 			return false;
 		}
 	}
 
 	if (a.nyan_changes.size() != b.nyan_changes.size()) {
-		TESTFAILMSG("nyan size");
+		//TESTFAILMSG("nyan size");
 		return false;
 	}
 
@@ -43,13 +43,13 @@ static bool operator == (Packet &a, Packet &b) {
 	     ia != a.nyan_changes.end() && ib != b.nyan_changes.end();
 	     ++ia, ++ib) {
 		if (ia->nyan_patch != ib->nyan_patch) {
-			TESTFAILMSG("nyan");
+			//TESTFAILMSG("nyan");
 			return false;
 		}
 	}
 
 	if (a.object_states.size() != b.object_states.size()) {
-		TESTFAILMSG("objects size");
+		//TESTFAILMSG("objects size");
 		return false;
 	}
 
@@ -85,7 +85,7 @@ static bool operator == (Packet &a, Packet &b) {
 
 
 /** Generate a dummy packet with some random data stored inside (but always the same packet!) */
-Packet generate_dummy_packet() {
+Packet generate_dummy_packet_long() {
 	Packet p;
 	for (int i = 0; i < 10; ++i) {
 		Packet::input inp;
@@ -124,6 +124,45 @@ Packet generate_dummy_packet() {
 	return p;
 }
 
+Packet generate_dummy_packet() {
+	Packet p;
+	for (int i = 0; i < 1; ++i) {
+		Packet::input inp;
+		inp.player = 1 * i;
+		inp.target_id = 2 * i;
+		inp.action_id = 3 * i + 3;
+		inp.kv_info[123] = 234 * i;
+		inp.kv_info[0x42] = 0x24 * i / 2;
+		p.inputs.push_back(inp);
+	}
+
+	{
+		Packet::nyanchange nc;
+		nc.nyan_patch = ".";
+		p.nyan_changes.push_back(nc);
+	}
+
+	for (int i = 0; i < 1; ++i) {
+		Packet::object_state ds;
+		ds.x = 1;
+		ds.y = i;
+		ds.id = i + 5;
+
+		for (int o = i; o < 0; ++o) {
+			Packet::trajectory_element te;
+			te.x = i;
+			te.y = o;
+			te.action = i*o;
+
+			ds.trajectory.push_back(te);
+		}
+		p.object_states.push_back(ds);
+		//EMPTY KV MAP
+	}
+
+	return p;
+}
+
 
 void test_test() {
 	Packet p1 = generate_dummy_packet();
@@ -136,7 +175,9 @@ void test_test() {
 	log::message m = ERR << "Message";
 
 	p1.inputs.front().player = 2;
-	TESTTHROWS(p1 == p2);
+	if ((p1 == p2)) {
+		TESTFAILMSG("p1 != p2");
+	}
 }
 
 
@@ -190,9 +231,10 @@ public:
 	}
 
 	bool operator() (Packet::object_state* s) {
-		s->id = cnt;
-		cnt ++;
-		return cnt < max;
+		return false;
+//		s->id = cnt;
+//		cnt ++;
+//		return cnt < max;
 	}
 };
 
@@ -213,14 +255,17 @@ void wiremanager_singleframe_test() {
 	//The Serializer stream poses as "network"
 	SerializerStream ss(log);
 	ss.set_write_mode(true);
-	wm1.on_wire(ss);
+	wm1.to_wire(ss);
 
 	dummy_object_state_provider provider2(200, 5);
 	WireManager wm2(log, provider2);
     ss.set_write_mode(false);
-    wm2.on_wire(ss);
+    wm2.from_wire(ss);
 
-	if (!(*wm1.get_frame_packet(0) == *wm2.get_frame_packet(0))) {
+	auto p1 = *wm1.get_frame_packet(0);
+	auto p2 = *wm2.get_frame_packet(0);
+
+	if (!(p1 == p2)) {
 		TESTFAILMSG("pin == pout with wire manager");
 	}
 }

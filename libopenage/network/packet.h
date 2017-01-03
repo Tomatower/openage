@@ -51,16 +51,6 @@ class Packet {
     friend class WireManager;
 public:
 
-    /** @brief C'tor for packet
-     *
-     * Create a packet from receiving
-     *
-     * @param host Host*
-     * @param stream SerializerStream&
-     *
-     */
-    Packet(std::shared_ptr<Host> host, SerializerStream &stream);
-
     /** @brief C'tor for Packet
      *
      * Create an empty packet for sending
@@ -149,8 +139,8 @@ public:
      */
     size_t serialized_size();
 
-private:
-    int _server_frame;
+	uint16_t remote_frame;
+
 };
 
 }

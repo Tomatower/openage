@@ -5,10 +5,13 @@
 
 namespace openage {
 namespace network {
+class SerializerStream;
 
-class WireManager {
+class HandshakeManager {
 public:
 
+	void from_wire (SerializerStream &ss);
+	void to_wire (SerializerStream &ss);
 
 };
 

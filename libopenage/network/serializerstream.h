@@ -3,8 +3,9 @@
 #pragma once
 
 #include "packet.h"
+#include "wiremanager.h"
 
-#include "../log/named_logsource.h"
+#include "../log/log.h"
 
 #include <deque>
 #include <string>
@@ -52,17 +53,16 @@ public:
      * \return SerializerStream& *this
      *
      */
-    SerializerStream &write(const int8_t *data, size_t length);
+    SerializerStream &write(const uint8_t *data, size_t length);
 
     /** \brief Read data from the beginning of the stream
-     *
      *
      * \param data int8_t*
      * \param length size_t
      * \return SerializerStream&
      *
      */
-    SerializerStream &read(int8_t *data, size_t length);
+    SerializerStream &read(uint8_t *data, size_t length);
 
     ///@TODO add more basic datatypes - maybe templated?
 
@@ -81,6 +81,7 @@ public:
      */
     void set_data(const std::vector<int8_t> &buffer);
 	void set_data(int8_t *start, size_t count);
+
     /** \brief Get the serialized data from the package again.
      *
      * This buffer can be immediately fed back into the @see set_data method
@@ -93,7 +94,6 @@ public:
 	size_t get_data(int8_t *start, size_t max_len);
 
     /** \brief Set if the stream is currently configured for reading or writing
-     *
      *
      * \param write bool true => write data to this stream. false => read data into objects
      * \return void
@@ -115,23 +115,32 @@ public:
      */
     size_t size();
 
-    SerializerStream &on_wire(Packet *);
-
     SerializerStream &on_wire(int32_t *data);
     SerializerStream &on_wire(std::string *data);
     SerializerStream &on_wire(uint16_t *data);
 
+    SerializerStream &on_wire(Packet *data);
     SerializerStream &on_wire(Packet::input *data);
     SerializerStream &on_wire(Packet::nyanchange *data);
     SerializerStream &on_wire(Packet::object_state *data);
     SerializerStream &on_wire(Packet::trajectory_element *data);
 
-    SerializerStream &map_on_wire(std::unordered_map<int, int> *data);
+	template <typename _type>
+    SerializerStream &on_wire(WireManager::reliable<_type> *data) {
+    	this->on_wire(&data->remote_frame);
+		this->deque_on_wire(&data->data);
+
+		return *this;
+	}
+
+    SerializerStream &map_on_wire(std::unordered_map<int32_t, int32_t> *data);
 
     template <typename _Base>
     SerializerStream &deque_on_wire(std::deque<_Base> *data) {
         int32_t cnt = data->size();
         this->on_wire(&cnt);
+
+        //logsink.log(INFO << "DEQUE: " << is_write() << " cnt " << cnt);
 
         if (this->is_write()) {
             for (auto it = data->begin(); it != data->end(); ++it) {
@@ -159,10 +168,10 @@ public:
      * \return int8_t* Pointer to the beginning of the data written
      *
      */
-    int8_t *write_observable(int8_t *data, size_t size);
+    uint8_t *write_observable(uint8_t *data, size_t size);
 
 private:
-    std::deque<int8_t> buffer;
+    std::deque<uint8_t> buffer;
     bool is_write_;
 	openage::log::NamedLogSource &logsink;
 };

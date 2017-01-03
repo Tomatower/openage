@@ -3,6 +3,8 @@
 #pragma once
 
 #include <functional>
+#include <map>
+#include <mutex>
 
 #include "packet.h"
 #include "../log/named_logsource.h"
@@ -19,9 +21,9 @@ namespace network {
  */
 class WireManager {
 public:
-	typedef std::function<bool(Packet::object_state*)> object_provider;
+	typedef std::function<bool(Packet::object_state*)> object_provider_t;
 
-	WireManager(openage::log::NamedLogSource &, object_provider);
+	WireManager(openage::log::NamedLogSource &, object_provider_t, int initial_mtu = 1500);
 
     /** @brief append a nyan change
      *
@@ -42,34 +44,67 @@ public:
      */
     void input(const Packet::input &input);
 
+	/** @brief handle the next packet
+	 *
+	 * create a packet, fill it from inputs, nyan changes and fill it up
+	 * until MTU is reached from object_provider
+	 *
+	 * @param strean stream to serialize to
+	 */
+	void to_wire(SerializerStream &stream);
 
-	void to_wire(std::vector<int8_t> &buffer, int *size);
-	void from_wire(std::vector<int8_t> &buffer, int size);
+	/** @brief handle the next packet
+	 *
+	 * Read Data from the packet and store it in the jitter buffer.
+	 * the Packet may now be read.
+     *
+	 * @param strean stream to serialize to
+	 */
 
-	void confirm(int16_t remote_frame);
+	void from_wire(SerializerStream &stream);
 
-	int16_t next_frame();
+
+	uint16_t next_frame();
 
 	std::shared_ptr<Packet> get_frame_packet(int frame);
 
 private:
-	object_provider object_provider;
+	void confirm_remote(uint16_t remote_frame);
+	std::shared_ptr<Packet> get_packet(uint16_t frame_id);
+
+
 	openage::log::NamedLogSource &logsink;
+	object_provider_t object_provider;
 
+	int mtu;
+	uint16_t last_confirmed_frame;
+	uint16_t local_frame;
 
-	std::deque<std::shared_ptr<Packet>> jitter_buffer;
-	std::deque<std::shared_ptr<Packet>> pool;
+	//TODO make unordered?
+	std::map<int, std::shared_ptr<Packet> > jitter_buffer;
 
-	template<typename _Packet>
+	std::mutex pool_mutex;
+	std::deque<std::shared_ptr<Packet> > pool;
+
+	template<typename _type>
 	struct reliable {
-		int16_t server_frame;
-		std::deque<_Packet> inputs;
+		uint16_t remote_frame;
+		std::deque<_type> data;
 	};
 
-	std::vector<uint8_t> working_buffer;
+	std::deque<reliable<Packet::input> > pending_inputs;
+	std::deque<reliable<Packet::nyanchange> > pending_nyan;
 
-	std::deque<reliable<Packet::input>> pending_inputs;
-	std::deque<reliable<Packet::nyanchange>> pending_nyan;
+	template <typename _type>
+	void confirm_reliables(std::deque<reliable<_type> > &d,
+							uint16_t last_received_frame) {
+		uint16_t max_frame = last_received_frame + 1;
+		while (last_received_frame != max_frame
+				&& d.front().remote_frame == last_received_frame) {
+			d.pop_front();
+			last_received_frame --;
+		}
+	}
 };
 
 

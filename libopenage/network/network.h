@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 
 #include "wiremanager.h"
+#include "handshakemanager.h"
 
 #include "../log/named_logsource.h"
 #include "../util/hash.h"
@@ -24,6 +25,7 @@ namespace network {
 
 class Packet;
 class Host;
+class SerializerStream;
 
 /**
  * Represents state changes in the network stack
@@ -172,7 +174,7 @@ enum class InterfaceType {
 class Interface {
 public:
 
-	enum class ProtocolIdentifier {
+	enum ProtocolIdentifier {
 		HANDSHAKE_MESSAGE_V0 = 0,
 		GAME_MESSAGE_V0 = 1,
 	};
@@ -266,13 +268,6 @@ public:
      */
 	void game_loop();
 
-    /** \brief Run the Lobby-network
-     *
-     * \return void
-     *
-     */
-	void lobby_loop();
-
 private:
 	void setup_client(const std::string &remote, short port);
 	void setup_server(short port);
@@ -286,8 +281,8 @@ private:
 
 
 private:
-	int16_t port;
 	std::string remote;
+	int16_t port;
 	std::string addr;
 
 	openage::log::NamedLogSource logsink;
@@ -300,7 +295,7 @@ private:
 
 	int gameloop_socket; //My UDP socket
 
-	SerializerStream serializer;
+	std::unique_ptr<SerializerStream> serializer;
 	std::vector<int8_t> network_buffer;
 
 	bool is_server;
