@@ -10,6 +10,9 @@
 #include "../log/named_logsource.h"
 
 namespace openage {
+
+class Player;
+
 namespace network {
 
 
@@ -66,7 +69,9 @@ public:
 
 	uint16_t next_frame();
 
-	std::shared_ptr<Packet> get_frame_packet(int frame);
+	std::shared_ptr<Packet> get_frame_packet(uint16_t frame);
+
+	void release_packet(std::shared_ptr<Packet> packet);
 
 private:
 	void confirm_remote(uint16_t remote_frame);
@@ -77,8 +82,8 @@ private:
 	object_provider_t object_provider;
 
 	int mtu;
-	uint16_t last_confirmed_frame;
-	uint16_t local_frame;
+	uint16_t last_confirmed_frame = 0;
+	uint16_t local_frame = 0;
 
 	//TODO make unordered?
 	std::map<int, std::shared_ptr<Packet> > jitter_buffer;

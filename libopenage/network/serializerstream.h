@@ -119,6 +119,17 @@ public:
     SerializerStream &on_wire(std::string *data);
     SerializerStream &on_wire(uint16_t *data);
 
+    template <typename _type>
+    SerializerStream &on_wire(_type *data) {
+        if (this->is_write()) {
+            this->write((uint8_t *)data, sizeof(*data));
+        } else {
+            this->read((uint8_t *)data, sizeof(*data));
+        }
+        return *this;
+    }
+
+
     SerializerStream &on_wire(Packet *data);
     SerializerStream &on_wire(Packet::input *data);
     SerializerStream &on_wire(Packet::nyanchange *data);
@@ -137,7 +148,7 @@ public:
 
     template <typename _Base>
     SerializerStream &deque_on_wire(std::deque<_Base> *data) {
-        int32_t cnt = data->size();
+        int16_t cnt = data->size();
         this->on_wire(&cnt);
 
         //logsink.log(INFO << "DEQUE: " << is_write() << " cnt " << cnt);

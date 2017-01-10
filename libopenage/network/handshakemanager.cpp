@@ -16,4 +16,9 @@ void HandshakeManager::to_wire(SerializerStream &stream) {
 
 }
 
+bool HandshakeManager::handle(SerializerStream &stream) {
+
+	return false;
+}
+
 }} //openage::network

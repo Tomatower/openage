@@ -1,6 +1,8 @@
 // Copyright 2016-2016 the openage authors. See copying.md for legal info.
 
 #include "network.h"
+#include "server.h"
+#include "client.h"
 #include "packet.h"
 #include "packetbuilder.h"
 #include "serializerstream.h"
@@ -124,6 +126,7 @@ Packet generate_dummy_packet_long() {
 	return p;
 }
 
+
 Packet generate_dummy_packet() {
 	Packet p;
 	for (int i = 0; i < 1; ++i) {
@@ -189,8 +192,10 @@ void serializer_test() {
 		SerializerStream ss(log);
 
 		Packet pout;
-		pin.to_stream(ss);
-		pout.from_stream(ss);
+		ss.set_write_mode(true);
+		ss.on_wire(&pin);
+		ss.set_write_mode(false);
+		ss.on_wire(&pout);
 
 		if (!(pin == pout)) {
 			TESTFAILMSG("pin == pout");
@@ -203,15 +208,15 @@ void serializer_test() {
 		Packet pout;
 		{
 			SerializerStream ss(log);
-			pin.to_stream(ss);
-
+			ss.set_write_mode(true);
+			ss.on_wire(&pin);
 			ss.get_data(buffer);
 		}
-
 		{
-			SerializerStream ss(log);
-			ss.set_data(buffer);
-			pout.from_stream(ss);
+			SerializerStream s2(log);
+			s2.set_data(buffer);
+			s2.set_write_mode(false);
+			s2.on_wire(&pout);
 		}
 
 		if (!(pin == pout)) {
@@ -220,11 +225,12 @@ void serializer_test() {
 	}
 }
 
+
 class dummy_object_state_provider {
 	int cnt, start, max;
 public:
-	dummy_object_state_provider(int start, int max) : cnt {start}, start{start}, max{max}
-	{};
+	dummy_object_state_provider(int start, int max) : cnt {start}, start{start}, max{max} {
+	};
 
 	void reset() {
 		cnt = start;
@@ -232,18 +238,19 @@ public:
 
 	bool operator() (Packet::object_state* s) {
 		return false;
+	}
+	bool operator() (const std::shared_ptr<Player> &p, Packet::object_state* s) {
+		return false;
 //		s->id = cnt;
 //		cnt ++;
 //		return cnt < max;
 	}
 };
 
-
+//TODO use dummy packet
 void wiremanager_singleframe_test() {
 	dummy_object_state_provider provider(0, 5);
-	log::NamedLogSource log("SingleFrameTest");
-
-	log.log(INFO << "SingleFrameTest");
+	log::NamedLogSource log("wiremanager_singleframe_test");
 
 	WireManager wm1(log, provider);
 	{
@@ -257,49 +264,53 @@ void wiremanager_singleframe_test() {
 	ss.set_write_mode(true);
 	wm1.to_wire(ss);
 
-	dummy_object_state_provider provider2(200, 5);
+	dummy_object_state_provider provider2(200, 205);
 	WireManager wm2(log, provider2);
-    ss.set_write_mode(false);
-    wm2.from_wire(ss);
+	ss.set_write_mode(false);
+	wm2.from_wire(ss);
 
-	auto p1 = *wm1.get_frame_packet(0);
+	//auto p1 = *wm1.get_frame_packet(0);
 	auto p2 = *wm2.get_frame_packet(0);
 
-	if (!(p1 == p2)) {
-		TESTFAILMSG("pin == pout with wire manager");
+	if (!(p2.inputs.begin()->player == 5)) {
+		TESTFAILMSG("lost id during transmission");
 	}
 }
 
-void wiremanager_multiframe_test() {
-
-}
 
 void handshake_test() {
+	dummy_object_state_provider provider1(100, 105);
+	dummy_object_state_provider provider2(200, 205);
+
 	//TESTFAILMSG("NOT IMPLEMENTED YET");
-	Interface server("localhost", 9001, InterfaceType::SERVER);
+	Server server(9001, provider1);
 
-	Interface client("localhost", 9001, InterfaceType::CLIENT);
+	Client client("localhost", 9001, provider2);
+	log::NamedLogSource log("handshake_test");
 
-	//TODO create a timeout (e.g. 1 second?)
-	while (server.connected_players().empty()) {
+	for (int i = 0; i < 10 && server.connected_players().empty(); ++i) {
 		server.game_loop();
 		client.game_loop();
+		log.log(INFO << "loop " << i);
+	}
+
+	if (server.connected_players().empty()) {
+		TESTFAILMSG("could not establish a handshaked connection");
 	}
 }
+
 
 void game_mode_test() {
 
 }
 
+
 void test() {
 	test_test();
 	serializer_test();
 	wiremanager_singleframe_test();
-	wiremanager_multiframe_test();
 	handshake_test();
 	game_mode_test();
 }
 
-}
-}
-} // openage::network::tests
+}}} // openage::network::tests

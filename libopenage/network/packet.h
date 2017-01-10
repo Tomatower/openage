@@ -57,22 +57,6 @@ public:
      */
     Packet();
 
-    /** @brief serialize this packet to the stream
-     *
-     * @param stream SerializerStream&
-     * @return void
-     *
-     */
-    void to_stream(SerializerStream &stream);
-
-    /** @brief clear the packet and create it from the stream
-     *
-     * @param stream SerializerStream&
-     * @return void
-     *
-     */
-    void from_stream(SerializerStream &stream);
-
     /** Host from where the message was received */
     std::shared_ptr<Host> source;
 
@@ -85,9 +69,9 @@ public:
      * death of units and buildings, ...
      */
     struct input {
-        int player;
-        int target_id;
-        int action_id;
+        int player = 0;
+        int target_id = 0;
+        int action_id = 0;
         std::unordered_map<int, int> kv_info;
     };
 
@@ -103,8 +87,8 @@ public:
      * This can be used to extrapolate what a unit will do.
      */
     struct trajectory_element {
-        int x, y;
-        int action;
+        int x = 0, y = 0;
+        int action = 0;
     };
 
     /**
@@ -113,8 +97,8 @@ public:
      * The same as the static update but includes trajectories
      */
     struct object_state {
-        int id;
-        int x,y;
+        int id = 0;
+        int x = 0,y = 0;
         std::unordered_map<int, int> kv_state;
         std::deque<trajectory_element> trajectory;
     };

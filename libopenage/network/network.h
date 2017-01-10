@@ -101,6 +101,8 @@ public:
  */
 class Host {
 public:
+	typedef std::function<bool(const std::shared_ptr<Player> &player, Packet::object_state*)> object_provider_t;
+
 	enum class State {
 		/**
 		 * The connection was openend.
@@ -151,13 +153,14 @@ public:
 	std::unique_ptr<WireManager> wire;
 
 	std::unique_ptr<HandshakeManager> handshake;
-
 	/**
 	 * The associated player
 	 *
 	 * This value has to be set upon receiving Event::Type::ESTABLISHED
 	 */
 	std::shared_ptr<Player> connected_player;
+
+	Host(log::NamedLogSource &, const object_provider_t &);
 };
 
 
@@ -172,21 +175,7 @@ enum class InterfaceType {
  * Here connections, packets and events are managed.
  */
 class Interface {
-public:
-
-	enum ProtocolIdentifier {
-		HANDSHAKE_MESSAGE_V0 = 0,
-		GAME_MESSAGE_V0 = 1,
-	};
-
-	class SockaddrHasher {
-	public:
-		size_t operator() (const sockaddr_storage &socka) const;
-		bool operator() (const sockaddr_storage &a, const sockaddr_storage &b) const;
-	};
-
-	typedef std::unordered_map<sockaddr_storage, std::shared_ptr<Host>, SockaddrHasher, SockaddrHasher> host_pool;
-
+protected:
 	/** @brief C'tor, get connection information
 	 *
 	 * @param remote uri of the remote server.
@@ -196,9 +185,16 @@ public:
 	 */
 	Interface (const std::string &remote,
 	           short port,
-	           InterfaceType type);
+	           InterfaceType type,
+	           const Host::object_provider_t &);
 
+public:
 	~Interface();
+
+	enum ProtocolIdentifier {
+		HANDSHAKE_MESSAGE_V0 = 0,
+		GAME_MESSAGE_V0 = 1,
+	};
 
 	/** @brief get a state string
 	 *
@@ -209,25 +205,19 @@ public:
 	 */
 	std::string get_state() const;
 
-	/** @brief server: get connected players
-	 *
-	 * Gets a list of alshitl connected players, only consists of the server on a client instance.
-	 *
-	 * @return const std::deque<Host *>& list of connected players
-	 *
-	 */
-	const host_pool &connected_players() const;
 
 	/** @brief start the service/event handling
 	 *
-	 * Start the event handling service and take a snapshot from any network activity happening.
+	 * Start the event handling service and take a snapshot from any network
+	 * activity happening.
 	 *
 	 */
-	void begin_service();
+	virtual void begin_service() = 0;
 
 	/** @brief get number of events
 	 *
-	 * Get the number of events that occurred between the last call to @see end_service and @see begin_service
+	 * Get the number of events that occurred between the last call to
+	 * @see end_service and @see begin_service
 	 * These can be read with @see get_event.
 	 *
 	 * @warning this is only available between calls to @see begin_service and @see end_service
@@ -240,11 +230,11 @@ public:
      *
      * \param id int index of the event in the range of [0 .. @see get_event_count()]
      * \return Event*
-     *
+	 *
      */
 	const std::unique_ptr<Event> &get_event(int id) const;
 
-	/** @brief Send the prepared message to the remote
+    /** @brief Send the prepared message to the remote
 	 *
 	 * The Message will be created in this step via callbacks
 	 *
@@ -254,33 +244,31 @@ public:
 	 */
 	void handle(std::shared_ptr<Host> host);
 
+
 	/** @brief end the service/event handling
 	 *
 	 * End the event handling service after a call to @see begin_service.
 	 *
 	 */
-	void end_service();
+	virtual void end_service() = 0;
 
     /** \brief Run the Game Loop
      *
      * \return void
      *
      */
-	void game_loop();
+	virtual void game_loop() = 0;
 
-private:
-	void setup_client(const std::string &remote, short port);
-	void setup_server(short port);
-
-	std::shared_ptr<Host> get_host(const sockaddr_storage &addr);
+protected:
 
 	void log(log::MessageBuilder, std::string text, bool fatal = false, int err = 0);
 
 	void send_buffer(const std::shared_ptr<Host> &to, const std::vector<int8_t> &buffer, int size);
+	void send_buffer(const std::shared_ptr<Host> &to, const SerializerStream &stream);
 
+protected:
+	Host::object_provider_t object_provider;
 
-
-private:
 	std::string remote;
 	int16_t port;
 	std::string addr;
@@ -288,9 +276,6 @@ private:
 	openage::log::NamedLogSource logsink;
 
 	std::deque<std::unique_ptr<Event>> events;
-
-	host_pool connected;
-	host_pool handshake_pending;
 
 
 	int gameloop_socket; //My UDP socket

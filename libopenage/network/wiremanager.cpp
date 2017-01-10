@@ -11,17 +11,16 @@ namespace network {
 WireManager::WireManager(openage::log::NamedLogSource &log, object_provider_t provider, int initial_mtu):
 	logsink{log},
 	object_provider(provider),
-	mtu(initial_mtu)
-{
+	mtu(initial_mtu) {
 
 }
 
 
-void WireManager::nyan_change(const std::string& patch)
-{
+void WireManager::nyan_change(const std::string& patch) {
 	if (pending_nyan.empty()
-		|| pending_nyan.back().remote_frame != local_frame) {
+	    || pending_nyan.back().remote_frame != local_frame) {
 		reliable<Packet::nyanchange> r;
+		r.remote_frame = local_frame;
 		pending_nyan.push_back(r);
 	}
 
@@ -33,8 +32,9 @@ void WireManager::nyan_change(const std::string& patch)
 
 void WireManager::input(const Packet::input& input) {
 	if (pending_inputs.empty()
-		|| pending_inputs.back().remote_frame != local_frame) {
+	    || pending_inputs.back().remote_frame != local_frame) {
 		reliable<Packet::input> r;
+		r.remote_frame = local_frame;
 		pending_inputs.push_back(r);
 	}
 
@@ -50,8 +50,8 @@ void WireManager::to_wire(SerializerStream &s) {
 	s.deque_on_wire(&pending_inputs);
 	s.deque_on_wire(&pending_nyan);
 
-	int32_t data = 0;
-	int32_t *datastream_counter = (int32_t *)s.write_observable((uint8_t *)&data, sizeof(data));
+	int16_t data = 0;
+	int16_t *datastream_counter = (int16_t *)s.write_observable((uint8_t *)&data, sizeof(data));
 	bool obj_generator_state = true;
 	while (obj_generator_state && (int32_t)s.size() < mtu) {
 		Packet::object_state state;
@@ -90,6 +90,12 @@ void WireManager::from_wire(SerializerStream &s) {
 		} //TODO: make it possible to merge different data sets
 	}
 
+
+	pending_inputs.clear();
+	pending_nyan.clear();
+
+	std::cout << std::endl;
+
 }
 
 
@@ -125,10 +131,12 @@ uint16_t WireManager::next_frame() {
 }
 
 
-std::shared_ptr<Packet> WireManager::get_frame_packet(int frame) {
+std::shared_ptr<Packet> WireManager::get_frame_packet(uint16_t frame) {
 	auto it = jitter_buffer.find(frame);
 	if (it != jitter_buffer.end()) {
-		return it->second;
+		auto packet = it->second;
+		jitter_buffer.erase(it);
+		return packet;
 	} else {
 		std::stringstream ss;
 		ss << "Jitter-buffer underflow. Did not receive Frame for ID " << frame
@@ -137,11 +145,17 @@ std::shared_ptr<Packet> WireManager::get_frame_packet(int frame) {
 			ss << it.first << ", ";
 		}
 		ss << "}";
-
-		logsink.log(MSG(warn) << ss.str());
+		logsink.log(CRIT << ss.str());
 		return std::shared_ptr<Packet>(nullptr);
 	}
 }
 
+void WireManager::release_packet(std::shared_ptr<Packet> packet) {
+	packet->clear();
+	pool.push_back(packet);
+}
 
-}} //openage::network
+
+
+}
+} //openage::network

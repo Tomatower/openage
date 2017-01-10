@@ -5,4 +5,6 @@ add_sources(libopenage
 	packet.cpp
 	serializerstream.cpp
 	test.cpp
+	server.cpp
+	client.cpp
 )

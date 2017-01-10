@@ -15,19 +15,6 @@ Packet::Packet () :
 }
 
 
-void Packet::to_stream(SerializerStream &data) {
-	data.set_write_mode(true);
-	data.on_wire(this);
-}
-
-
-void Packet::from_stream(SerializerStream &data) {
-	this->clear();
-	data.set_write_mode(false);
-	data.on_wire(this);
-}
-
-
 void Packet::clear() {
 	this->inputs.clear();
 	this->nyan_changes.clear();

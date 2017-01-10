@@ -13,6 +13,7 @@ public:
 	void from_wire (SerializerStream &ss);
 	void to_wire (SerializerStream &ss);
 
+	bool handle (SerializerStream &ss);
 };
 
 }} //openage::network
