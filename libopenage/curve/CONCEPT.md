@@ -17,11 +17,11 @@ The minimal set of curves is for the following types of values, and possible com
 
  * **SimpleContinuous** A single dimensional value, has to support any assignment and mathematical operation. It can be interpreted as continuous value and will be interpolated linear between two points in time.
  * **SimpleDiscrete** A single dimensional value, only supporting discrete steps, issued as starting point and value. An interpolation is done by finding the closest value.
-  * **Multidimensional** A multidimensional value with a constant dimension
-  * **Event** An Event that happens at _exactly_ one point in time, that should trigger certains things within the renderer/client, like explosions.
-  * **EventList** Multiple events to be filtered within a [from-to) window
-  * **Object** A freely-typed object, that has to be sub-typed for arbitrary types to be traced by curves.
-  * **List** Contains Objects, but also keeps track of their creation/destruction based on a timeline
+ * **Multidimensional** A multidimensional value with a constant dimension
+ * **Event** An Event that happens at _exactly_ one point in time, that should trigger certains things within the renderer/client, like explosions.
+ * **EventList** Multiple events to be filtered within a [from-to) window
+ * **Object** A freely-typed object, that has to be sub-typed for arbitrary types to be traced by curves.
+ * **List** Contains Objects, but also keeps track of their creation/destruction based on a timeline
 
 Networking Features
 -----
@@ -44,4 +44,31 @@ Here are some examples of scenarios where these interpolating features are relev
  * Killign a unit (remove)
  * Shooting an arrow (insert inbetween)
 
+Possible Network Frame
+--------
+
+Main Frame
+  |----------------------------|
+  | Protocol Version (16)      |
+  | Number of updates (16)     |
+  | Update 1                   |
+  | ....                       |
+  |----------------------------|
+
+Updates: 
+  |------------------------------|
+  | Type (4) | Flagset (4)       |
+  | Size of this update in B (16)|
+  | Number of keyframes (8)      |
+  | Keyframe 1                   |
+  | ...                          |
+  |------------------------------|
+
+Keyframe for Type SimpleContinuous
+
+  |-----------------------|
+  | Timestamp start (32)  | 
+  | Size of Value (8)     |
+  | Value (n)             |
+  |-----------------------|
 
