@@ -5,15 +5,15 @@ The Curve
 Idea
 -----
 
-Every Value changes over time, but can be described in a sequence of changes. 
+Every Value changes over time, but can be described in a sequence of changes.
 At every moment in time, the value can be calculated based on the interpolation method used for it, and the current state.
 The sequence of changes can be calculated the moment a unit receives a movement command, and this sequence is not constrained. A prediction about a movement can be made, and at any point in the future evaluated, without the need to recalculate.
 
-This is a huge benefit for the networking - since only actions and chances to those actions are transmitted, but not as commands but as consequence of these commands. 
+This is a huge benefit for the networking - since only actions and chances to those actions are transmitted, but not as commands but as consequence of these commands.
 
 Types
 ------
-The minimal set of curves is for the following types of values, and possible combinations: 
+The minimal set of curves is for the following types of values, and possible combinations:
 
  * **SimpleContinuous** A single dimensional value, has to support any assignment and mathematical operation. It can be interpreted as continuous value and will be interpolated linear between two points in time.
  * **SimpleDiscrete** A single dimensional value, only supporting discrete steps, issued as starting point and value. An interpolation is done by finding the closest value.
@@ -27,8 +27,8 @@ Networking Features
 -----
 The Networkign has to only transmit keyframes, and no other interpolation/state information.
 
-The local state of each client is tracked by the server, and changes in the curve model on the server trigger updates to be sent to the client. 
-There are two ways of handling a keyframe update: 
+The local state of each client is tracked by the server, and changes in the curve model on the server trigger updates to be sent to the client.
+There are two ways of handling a keyframe update:
 
 1. Append new keyframes
 2. Insert keyframes inbetween
@@ -48,27 +48,34 @@ Possible Network Frame
 --------
 
 Main Frame
-  |----------------------------|
-  | Protocol Version (16)      |
-  | Number of updates (16)     |
-  | Update 1                   |
-  | ....                       |
-  |----------------------------|
 
-Updates: 
-  |------------------------------|
-  | Type (4) | Flagset (4)       |
-  | Size of this update in B (16)|
-  | Number of keyframes (8)      |
-  | Keyframe 1                   |
-  | ...                          |
-  |------------------------------|
+<pre>
+|----------------------------|
+| Protocol Version (16)      |
+| Number of updates (16)     |
+| Update 1                   |
+| ....                       |
+|----------------------------|
+</pre>
+
+Updates:
+
+<pre>
+|------------------------------|
+| Type (4) | Flagset (4)       |
+| Size of this update in B (16)|
+| Number of keyframes (8)      |
+| Keyframe 1                   |
+| ...                          |
+|------------------------------|
+</pre>
 
 Keyframe for Type SimpleContinuous
 
-  |-----------------------|
-  | Timestamp start (32)  | 
-  | Size of Value (8)     |
-  | Value (n)             |
-  |-----------------------|
-
+<pre>
+|-----------------------|
+| Timestamp start (32)  |
+| Size of Value (8)     |
+| Value (n)             |
+|-----------------------|
+</pre>
