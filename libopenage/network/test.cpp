@@ -16,7 +16,7 @@ namespace tests {
 
 static bool operator == (Packet &a, Packet &b) {
 	if (a.inputs.size() != b.inputs.size()) {
-		//TESTFAILMSG("inputs size");
+		TESTFAILMSG("inputs size");
 		return false;
 	}
 
@@ -26,18 +26,18 @@ static bool operator == (Packet &a, Packet &b) {
 		if (ia->player != ib->player
 		    || ia->target_id != ib->target_id
 		    || ia->action_id != ib->action_id) {
-			//TESTFAILMSG("inputs");
+			TESTFAILMSG("inputs");
 			return false;
 		}
 
 		if (ia->kv_info != ib->kv_info) {
-			//TESTFAILMSG("inputs kv");
+			TESTFAILMSG("inputs kv");
 			return false;
 		}
 	}
 
 	if (a.nyan_changes.size() != b.nyan_changes.size()) {
-		//TESTFAILMSG("nyan size");
+		TESTFAILMSG("nyan size");
 		return false;
 	}
 
@@ -45,13 +45,13 @@ static bool operator == (Packet &a, Packet &b) {
 	     ia != a.nyan_changes.end() && ib != b.nyan_changes.end();
 	     ++ia, ++ib) {
 		if (ia->nyan_patch != ib->nyan_patch) {
-			//TESTFAILMSG("nyan");
+			TESTFAILMSG("nyan");
 			return false;
 		}
 	}
 
 	if (a.object_states.size() != b.object_states.size()) {
-		//TESTFAILMSG("objects size");
+		TESTFAILMSG("objects size");
 		return false;
 	}
 
@@ -178,9 +178,10 @@ void test_test() {
 	log::message m = ERR << "Message";
 
 	p1.inputs.front().player = 2;
-	if ((p1 == p2)) {
-		TESTFAILMSG("p1 != p2");
-	}
+	// Do not test for unequality - the == comparator will produce TESTFAILMSG's
+	//if ((p1 == p2)) {
+	//	TESTFAILMSG("p1 != p2");
+	//}
 }
 
 
@@ -201,7 +202,8 @@ void serializer_test() {
 			TESTFAILMSG("pin == pout");
 		}
 	}
-	// Test serialize / deserialize with copying the data buffer (i.e. simulate a network)
+	// Test serialize / deserialize with copying the data buffer
+	// (i.e. simulate a network)
 	{
 		std::vector<int8_t> buffer;
 		Packet pin = generate_dummy_packet();

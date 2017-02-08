@@ -40,7 +40,7 @@ Interface::Interface(const std::string& remote, short port, InterfaceType type, 
 	serializer{new SerializerStream(logsink)},
 	network_buffer(100000, 0),
 	is_server{ type == InterfaceType::SERVER },
-	object_provider {op}
+	object_provider{op}
 {
 }
 
@@ -107,10 +107,13 @@ void Interface::send_buffer(const std::shared_ptr<Host> &to, const SerializerStr
 void Interface::handle(std::shared_ptr<Host> host) {
 	this->serializer->clear();
 	this->serializer->set_write_mode(true);
+	// Move data from the wiremanager into the serializer
 	host->wire->to_wire(*serializer);
 
-    //TODO Check size
+    // TODO Check size; TODO make it in place
+	// Move Serializer Data into the network buffer
     size_t size = this->serializer->get_data(this->network_buffer);
+	// Send the Data to the network
 	this->send_buffer(host, this->network_buffer, size);
 }
 

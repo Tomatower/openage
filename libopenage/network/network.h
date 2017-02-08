@@ -278,7 +278,8 @@ protected:
 	std::deque<std::unique_ptr<Event>> events;
 
 
-	int gameloop_socket; //My UDP socket
+	int udp_socket = -1; //My UDP socket
+	int gameloop_socket = -1; //My SCTP socket
 
 	std::unique_ptr<SerializerStream> serializer;
 	std::vector<int8_t> network_buffer;

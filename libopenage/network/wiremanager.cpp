@@ -90,12 +90,10 @@ void WireManager::from_wire(SerializerStream &s) {
 		} //TODO: make it possible to merge different data sets
 	}
 
-
 	pending_inputs.clear();
 	pending_nyan.clear();
 
 	std::cout << std::endl;
-
 }
 
 

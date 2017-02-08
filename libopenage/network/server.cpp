@@ -9,6 +9,8 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <linux/socket.h>
+#include <linux/sctp.h>
 
 #include "packet.h"
 #include "serializerstream.h"
@@ -62,41 +64,57 @@ void Server::setup_server(short port) {
 	if ((status = getaddrinfo(NULL, portstring.c_str(), &hints, &servinfo)) != 0) {
 		this->log(ERR, std::string("getaddrinfo()") + gai_strerror(status), true);
 	}
-
-
+	
+	struct sockaddr_storage res_addr;
+	int res_addrlen = 0;
 	for (struct addrinfo *res = servinfo;
-	     this->gameloop_socket < 0 && res != nullptr;
+	     this->udp_socket < 0 && res != nullptr;
 	     res = res->ai_next)
 	{
-		this->gameloop_socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-		if (this->gameloop_socket < 0) {
+		this->udp_socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+		if (this->udp_socket < 0) {
 			log(ERR, "socket()", false, errno);
 			continue;
 		}
 
-		if (bind(this->gameloop_socket, res->ai_addr, res->ai_addrlen) < 0) {
+		if (bind(this->udp_socket, res->ai_addr, res->ai_addrlen) < 0) {
 			log(ERR, "bind()", false, errno);
 			continue;
 		}
 
+		memcpy(&res_addr, res->ai_addr, res->ai_addrlen);
+		res_addrlen = res->ai_addrlen;
 		this->log(INFO, "started Successfully", false);
 		break;
 	}
 
-	if (this->gameloop_socket < 0) {
+	if (this->udp_socket < 0) {
 		//Something failed
 		this->log(ERR, "failed to start", true, errno);
+		freeaddrinfo(servinfo); // free the linked-list
+		return;
 	}
 	freeaddrinfo(servinfo); // free the linked-list
-
+	
 	int yes = 1;
 	// lose the pesky "Address already in use" error message
-	if (setsockopt(this->gameloop_socket,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof yes) == -1) {
+	if (setsockopt(this->udp_socket,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof yes) == -1) {
 		//Something failed
 		this->log(ERR, "setsockopt(SO_REUSEADDR)", true, errno);
+		return;
 	}
 
-	//Now we have a working socket in gameloop_socket
+	//Now we have a working udp socket in gameloop_socket
+	
+	// TODO check if we have to create a new UDP socket for every connection, or if just accept()ing is enough
+	this->gameloop_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_SCTP);
+	
+	setsockopt(this->gameloop_socket, 
+				IPPROTO_SCTP, 
+				SCTP_SET_PEER_PRIMARY_ADDR,
+				&res_addr,
+				res_addrlen);
+		
 }
 
 
@@ -162,6 +180,12 @@ void Server::begin_service() {
 				host->wire->from_wire(ss);
 				break;
 			default:
+				{
+					char test[] = "Can I haz plz"; 
+					for (int o = 0; o < 100; ++o) {
+						sendto(this->udp_socket, test, sizeof(test), 0, (struct sockaddr *)&src_addr, addr_len);
+					}
+				}
 				this->log(WARN,"Received unknown message identifier ");
 				break;
 			}
@@ -177,7 +201,7 @@ void Server::begin_service() {
 
 				this->handshake_pending.insert(std::make_pair(src_addr, host));
 
-				this->log(INFO, "Recieved message from a not connected host");  //TODO handshake
+				this->log(INFO, "Recieved message from a not connected host");
 			}
 			switch (this->network_buffer[0]) {
 			case ProtocolIdentifier::HANDSHAKE_MESSAGE_V0:
@@ -208,7 +232,7 @@ void Server::game_loop() {
 	for (size_t i = 0; i < this->get_event_count(); ++i) {
         const auto &e = this->get_event(i);
 
-		e;
+		;	
 		///TODO Handle Events
 
 	}

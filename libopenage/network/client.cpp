@@ -9,6 +9,8 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <linux/socket.h>
+#include <linux/sctp.h>
 #include <memory.h>
 
 #include "packet.h"
@@ -55,21 +57,42 @@ void Client::setup_client(const std::string &remote, short port) {
 		inet_ntop(res->ai_family,res->ai_addr, addr_str, sizeof (addr_str));
 		this->addr = addr_str;
 
-		this->gameloop_socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-		if (this->gameloop_socket < 0) {
+		this->udp_socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+		if (this->udp_socket < 0) {
 			this->log(INFO, "socket()", false, errno);
 			continue;
 		}
 
-		if (connect(this->gameloop_socket, res->ai_addr, res->ai_addrlen) < 0) {
+		if (connect(this->udp_socket, res->ai_addr, res->ai_addrlen) < 0) {
 			this->log(INFO, "connect()", false, errno);
 			continue;
 		}
 		this->log(INFO, "connected successfully", false);
 
-		host = std::shared_ptr<Host>(new Host(this->logsink, object_provider));
-		host->src_addr = *(sockaddr_storage*)res->ai_addr;
-		host->src_addr_len = res->ai_addrlen;
+		this->host = std::shared_ptr<Host>(new Host(this->logsink, object_provider));
+		this->host->src_addr = *(sockaddr_storage*)res->ai_addr;
+		this->host->src_addr_len = res->ai_addrlen;
+	
+		{
+			sockaddr_storage addr;
+			char buffer[256];
+			socklen_t len = sizeof(addr);
+			int recv = recvfrom(this->udp_socket, buffer, sizeof(buffer), 0, (struct sockaddr *)&addr, &len);
+			std::cout << buffer;
+
+		}
+		// TODO Connect to a SCTP socket
+		this->gameloop_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_SCTP);
+		
+		// configure SCTP to reuse the (connected) udp socket
+		
+		setsockopt(this->gameloop_socket, 
+				IPPROTO_SCTP, 
+				SCTP_SET_PEER_PRIMARY_ADDR,
+				res->ai_addr,
+				res->ai_addrlen);
+		
+		//TODO open?
 
 		break;
 	}

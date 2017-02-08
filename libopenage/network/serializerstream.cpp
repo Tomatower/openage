@@ -38,6 +38,7 @@ SerializerStream &SerializerStream::read(uint8_t *data, size_t length) {
 	return *this;
 }
 
+
 uint8_t *SerializerStream::write_observable(uint8_t *data, size_t size) {
 	if (size > 0) {
 		//Store the currently last element
@@ -48,15 +49,14 @@ uint8_t *SerializerStream::write_observable(uint8_t *data, size_t size) {
 		tmp ++;
 		return tmp;
 	} else {
-		openage::log::message e = ERR << "Cannot observe types of size 0";
-		throw new openage::error::Error(e);
+		throw new openage::error::Error(ERR << "Cannot observe types of size 0");
 	}
 	return nullptr;
 }
 
 
 SerializerStream &SerializerStream::on_wire(Packet *p) {
-	logsink.log(CRIT << "You should not call on_wire(Packet*)!");
+//	logsink.log(CRIT << "You should not call on_wire(Packet*)!");
 	this->deque_on_wire(&p->inputs);
 	this->deque_on_wire(&p->nyan_changes);
 	this->deque_on_wire(&p->object_states);
@@ -82,6 +82,7 @@ SerializerStream &SerializerStream::on_wire(int32_t *data) {
 	return *this;
 }
 
+
 SerializerStream &SerializerStream::on_wire(uint16_t *data) {
 	if (this->is_write()) {
 		this->write((uint8_t *)data, sizeof(*data));
@@ -90,6 +91,7 @@ SerializerStream &SerializerStream::on_wire(uint16_t *data) {
 	}
 	return *this;
 }
+
 
 SerializerStream &SerializerStream::on_wire(std::string *data) {
 	size_t length = this->is_write() ? data->length() : 0;
@@ -100,7 +102,7 @@ SerializerStream &SerializerStream::on_wire(std::string *data) {
 		this->write((const uint8_t *)data->c_str(), length);
 	} else {
 		data->resize(length, ' ');
-		this->read((uint8_t *)&(*data)[0], length); //TODO maybe use intermediate buffer
+		this->read((uint8_t *)&(*data)[0], length);
 	}
 	return *this;
 }
@@ -174,9 +176,9 @@ void SerializerStream::set_data(int8_t *start, size_t count) {
 size_t SerializerStream::get_data(std::vector<int8_t> &out_data) const {
 	if (out_data.size() < this->buffer.size()) {
 		logsink.log(WARN << "Network needed to reallocate buffer from "
-									<< (uint64_t)out_data.size() << "Bytes to "
-									<< (uint64_t)this->buffer.size() << "Bytes");
-		out_data.resize(this->buffer.size());
+					  	 << (uint64_t)out_data.size() << " Bytes to "
+						 << (uint64_t)this->buffer.size() << " Bytes");
+		out_data.reserve(this->buffer.size());
 	}
 	std::copy(this->buffer.begin(), this->buffer.end(), std::back_inserter(out_data));
 	return this->buffer.size();
@@ -191,9 +193,8 @@ size_t SerializerStream::get_data(int8_t *out, size_t max_len) {
 		std::copy(this->buffer.begin(), this->buffer.begin() + max_len, out);
 
 		logsink.log(WARN << "Network buffer too small "
-						  << (uint64_t)max_len<< " Bytes provided,  "
-						  << (uint64_t)this->buffer.size() << " Bytes needed");
-
+						 << (uint64_t)max_len<< " Bytes provided,  "
+						 << (uint64_t)this->buffer.size() << " Bytes needed");
 		return max_len;
 	}
 }
