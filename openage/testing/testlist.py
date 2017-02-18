@@ -110,7 +110,7 @@ def demos_cpp():
     yield ("openage::pyinterface::tests::pyobject_demo",
            "a tiny interactive interpreter using PyObjectRef")
     yield ("openage::tubepong::demo",
-           "a pong game implemented in tubes, running the whole game at the same time, collapsing to 20Hz")
+           "a pong game implemented in tubes")
 
 
 def benchmark_cpp():
