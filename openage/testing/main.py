@@ -81,8 +81,19 @@ def process_args(args, error):
 
     # double-check for unknown tests and demos
     for test in args.test:
+        matched = False
         if (test, 'test') not in test_list:
-            error("no such test: " + test)
+            # If the test was not found explicit in the testlist, try to find
+            # all prefixed tests and run them instead.
+            matched = False
+            for candidate_name, candidate_type in test_list:
+                if candidate_name.startswith(test) and candidate_type == "test":
+                    matched = True
+                    args.test.append(candidate_name)
+            if not matched:
+                error("no such test: " + test)
+        if matched:
+            args.test.remove(test)
 
     if args.demo:
         if (args.demo[0], 'demo') not in test_list:
