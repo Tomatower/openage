@@ -61,7 +61,10 @@ def process_args(args, error):
         error("can't run individual test or demo or benchmark when running "
               "all tests")
 
-    if bool(args.test) ^ bool(args.demo) ^ bool(args.benchmark):
+    from pprint import pprint
+    pprint(args)
+
+    if not( bool(args.test) ^ bool(args.demo) ^ bool(args.benchmark) ):
         error("can only run one of demo, benchmarks tests")
 
     # link python and c++ so it hopefully works when testing
