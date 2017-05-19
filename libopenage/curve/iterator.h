@@ -10,12 +10,16 @@ namespace curve {
 template <typename val_t,
           class container_t,
           class iterator_t = typename container_t::iterator>
-class CurveIterator :
-	public std::iterator<std::forward_iterator_tag, val_t >
-{
+class CurveIterator {
 public:
 	virtual val_t &value() const = 0;
 	virtual bool valid() const = 0;
+
+	CurveIterator() :
+		base{},
+		container_end{},
+		from{-std::numeric_limits<curve_time_t>::infinity()},
+		to{+std::numeric_limits<curve_time_t>::infinity()} {}
 
 	CurveIterator(const CurveIterator &rhs) :
 		base{rhs.base},

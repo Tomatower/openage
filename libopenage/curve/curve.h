@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <limits>
+
 namespace openage {
 namespace curve {
 
