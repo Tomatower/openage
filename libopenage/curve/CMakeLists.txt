@@ -3,6 +3,7 @@ add_sources(libopenage
 	continuous.cpp
 	curve.cpp
 	discrete.cpp
+	events.cpp
 	iterator.cpp
 	map.cpp
 	map_filter_iterator.cpp
