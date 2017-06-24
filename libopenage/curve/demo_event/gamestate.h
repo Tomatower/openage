@@ -1,14 +1,13 @@
-// Copyright 2015-2017 the openage authors. See copying.md for legal info.
+// Copyright 2017-2017 the openage authors. See copying.md for legal info.
 
 #pragma once
 
-#include "../tube_continuous.h"
-#include "../tube_discrete.h"
-#include "../tube_object.h"
+#include "../continuous.h"
+#include "../discrete.h"
 #include "../../util/vector.h"
 
 namespace openage {
-namespace tubepong {
+namespace curvepong {
 
 struct event {
 	int player;
@@ -19,7 +18,7 @@ struct event {
 	event() : player(0), state(IDLE) {}
 };
 
-class PongPlayer : public tube::TubeObject {
+class PongPlayer {
 public:
 	PongPlayer() {
 		speed.set_drop(0, 1);
@@ -31,19 +30,19 @@ public:
 		id = 0;
 	}
 
-	tube::Discrete<float> speed;
-	tube::Continuous<float> position;
-	tube::Discrete<int> lives;
-	tube::Discrete<event> state;
-	tube::Discrete<float> size;
+	curve::Discrete<float> speed;
+	curve::Continuous<float> position;
+	curve::Discrete<int> lives;
+	curve::Discrete<event> state;
+	curve::Discrete<float> size;
 	float y;
 	int id;
 };
 
-class PongBall : public tube::TubeObject {
+class PongBall {
 public:
-	tube::Discrete<util::Vector<2>> speed;
-	tube::Continuous<util::Vector<2>> position;
+	curve::Discrete<util::Vector<2>> speed;
+	curve::Continuous<util::Vector<2>> position;
 };
 
 class PongState {
@@ -56,4 +55,4 @@ public:
 	util::Vector<2> resolution;
 };
 
-}} // openage::tubepong
+}} // openage::curvepong

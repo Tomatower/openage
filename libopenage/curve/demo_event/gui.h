@@ -7,7 +7,7 @@
 #include "gamestate.h"
 
 namespace openage {
-namespace tubepong {
+namespace curvepong {
 
 
 class Gui {
@@ -15,11 +15,11 @@ class Gui {
 public:
 	Gui();
 	std::vector<event> &getInputs(const PongPlayer &player);
-	void draw(PongState &state, const tube::tube_time_t &now);
-	void draw_ball(util::Vector<2> ball, int idx);
+	void draw(PongState &state, const curve::curve_time_t &now);
+	void draw_ball(util::Vector<2> ball, char chr);
 
 private:
 	std::vector<event> input_cache;
 };
 
-}} // openage::tubepong
+}} // openage::curvepong

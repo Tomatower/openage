@@ -3,12 +3,12 @@
 #include "aicontroller.h"
 
 namespace openage {
-namespace tubepong {
+namespace curvepong {
 
 std::vector<event> &AIInput::getInputs(
 		const PongPlayer &player,
 		const PongBall &ball,
-		const tube::tube_time_t &now) {
+		const curve::curve_time_t &now) {
 	this->event_cache.clear();
 
 	auto position = player.position.get(now);
@@ -27,4 +27,4 @@ std::vector<event> &AIInput::getInputs(
 	return this->event_cache;
 }
 
-}} // openage::tubepong
+}} // openage::curvepong

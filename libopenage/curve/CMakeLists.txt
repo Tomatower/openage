@@ -12,6 +12,7 @@ add_sources(libopenage
 	queue_filter_iterator.cpp
 )
 
-add_subdirectory(demo)
+#add_subdirectory(demo)
+add_subdirectory(demo_event)
 add_subdirectory(internal)
 add_subdirectory(test)

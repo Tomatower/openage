@@ -48,7 +48,6 @@ add_subdirectory("rng")
 add_subdirectory("shader")
 add_subdirectory("terrain")
 add_subdirectory("testing")
-add_subdirectory("tube")
 add_subdirectory("unit")
 add_subdirectory("util")
 
