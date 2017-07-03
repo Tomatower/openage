@@ -5,4 +5,4 @@
 namespace openage {
 namespace curve {
 
-}} // openage::curve
+}} // namespace openage::curve
