@@ -18,7 +18,7 @@ namespace renderer {
  *
  * Currently, the glyph atlas uses a naive "Shelf First-Fit" algorithm based on the article
  * "A Thousand Ways to Pack the Bin - A Practical Approach to Two-Dimensional Rectangle Bin Packing"
- * by Jukka Jylänki. The article can be found at http://clb.demon.fi/files/RectangleBinPack.pdf
+ * by Jukka Jylänki. The article can be found at http://clb.demon.fi/files/RectangleBinPack.pdf
  *
  * This is a very basic algorithm. If there is a need for a more complex packing requirement, the
  * glyph atlas can be easily modified.
