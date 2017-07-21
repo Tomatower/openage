@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <limits>
 
 namespace openage {
@@ -14,6 +15,6 @@ namespace curve {
  * pxd:
  *     ctypedef double curve_time_t
  */
-typedef double curve_time_t;
+typedef int64_t curve_time_t;
 
 }} // openage::curve
